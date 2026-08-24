@@ -4,11 +4,24 @@
 
 SecureDrop is a secure file-sharing web application engineered to protect files and cryptographic keys using a hybrid cryptosystem combining symmetric encryption (AES), asymmetric encryption (RSA), and cryptographic hashing (SHA-256).
 
-> [!NOTE]
-> **Current Status: Phase 1 — Project Foundation & Architecture**
-> Phase 1 currently contains only the decoupled project foundation, initial configuration management, basic health-check API endpoints, and development connectivity setup.
-> 
-> *Encryption algorithms (AES, RSA), file upload/download, integrity checking (SHA-256), and user authentication will be implemented in subsequent phases.*
+---
+
+## Current Status: Phase 1 — Completed
+
+### ✅ Completed in Phase 1
+- **Decoupled Architecture:** Clean separation between `frontend/` (React + Vite + Tailwind CSS) and `backend/` (FastAPI + Uvicorn + Pydantic Settings).
+- **Frontend Routing & UI:** Navigation bar, footer, landing page, login page, registration page, dashboard, send file page, files vault, and profile page.
+- **Supabase Authentication:** Official `@supabase/supabase-js` client, registration with user metadata, login, logout, session persistence across reloads, and route guards (`ProtectedRoute`, `GuestRoute`).
+- **Backend Health & CORS:** FastAPI backend serving `/api/health` and `/api/v1/health` with environment-driven CORS configuration (`ALLOWED_ORIGINS`).
+- **Environment & Security Hygiene:** Zero hardcoded secrets, complete `.env` / `.gitignore` separation, and environment-driven API URLs (`VITE_API_BASE_URL`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`).
+- **One-Click Launcher:** Windows [start.bat](file:///c:/Project/SecureDrop/start.bat) to launch both services and open the browser automatically.
+
+### ⏳ Not Yet Implemented (Future Phases)
+- File sharing logic and database application tables
+- Client-side symmetric encryption (AES-256-GCM)
+- Asymmetric key generation and key protection (RSA-4096 / RSA-OAEP)
+- File integrity verification checksums (SHA-256)
+- Encrypted file storage integration (Supabase Storage)
 
 ---
 
@@ -17,7 +30,9 @@ SecureDrop is a secure file-sharing web application engineered to protect files 
 ### Frontend
 - **Framework:** React 18
 - **Tooling & Bundler:** Vite
+- **Routing:** React Router DOM (v7)
 - **Styling:** Tailwind CSS
+- **Authentication:** Supabase Auth (`@supabase/supabase-js`)
 - **Icons:** Lucide React
 
 ### Backend
@@ -26,12 +41,11 @@ SecureDrop is a secure file-sharing web application engineered to protect files 
 - **Configuration & Validation:** Pydantic / Pydantic Settings
 - **Environment Management:** python-dotenv
 
-### Future Infrastructure & Architecture
-- **Frontend Hosting:** Vercel
-- **Backend Hosting:** Render
-- **Database:** Supabase PostgreSQL
-- **Encrypted File Storage:** Supabase Storage
-- **Cryptosystem:** AES-256, RSA-4096 / 2048, SHA-256
+### Deployment Architecture
+- **Frontend:** Vercel
+- **Backend:** Render
+- **Database & Auth:** Supabase (Auth + PostgreSQL)
+- **Storage:** Supabase Storage
 
 ---
 
@@ -39,26 +53,28 @@ SecureDrop is a secure file-sharing web application engineered to protect files 
 
 ```text
 SecureDrop/
-├── .gitignore               # Root git ignore (prevents secret leaks & build artifacts)
+├── .gitignore               # Root git ignore (protects secrets, venvs, & node_modules)
 ├── README.md                # Project documentation
+├── start.bat                # Windows one-click development launcher
 │
 ├── frontend/                # React + Vite + Tailwind CSS Frontend
-│   ├── public/              # Static assets & icons
-│   │   └── shield.svg
+│   ├── public/              # Static assets & icons (shield.svg)
 │   ├── src/
-│   │   ├── components/      # Reusable UI components (Navbar, HealthBadge, etc.)
-│   │   ├── pages/           # Application views (LandingPage)
-│   │   ├── services/        # API communication client
-│   │   ├── App.jsx          # Root component
-│   │   ├── main.jsx         # Application entry point
-│   │   └── index.css        # Tailwind CSS imports & styles
+│   │   ├── components/      # Reusable UI components (Navbar, Footer, Button, Input, Card, StatusBadge, etc.)
+│   │   ├── context/         # AuthContext with Supabase session management
+│   │   ├── lib/             # Supabase client configuration (supabase.js)
+│   │   ├── pages/           # LandingPage, LoginPage, RegisterPage, DashboardPage, SendFilePage, FilesPage, ProfilePage
+│   │   ├── services/        # Backend API communication client (api.js)
+│   │   ├── App.jsx          # Application root with Protected & Guest routes
+│   │   ├── main.jsx         # React DOM entry point
+│   │   └── index.css        # Tailwind CSS directives & custom styling
 │   ├── index.html           # HTML template
 │   ├── package.json         # Frontend dependencies & scripts
 │   ├── postcss.config.js    # PostCSS configuration
 │   ├── tailwind.config.js   # Tailwind CSS configuration
 │   ├── vite.config.js       # Vite build & dev configuration
 │   ├── .env.example         # Template for frontend environment variables
-│   └── .env                 # Local frontend environment file
+│   └── .env                 # Local frontend environment file (gitignored)
 │
 └── backend/                 # FastAPI Python Backend
     ├── app/
@@ -84,83 +100,48 @@ SecureDrop/
     │       └── __init__.py
     ├── requirements.txt     # Backend Python dependencies
     ├── .env.example         # Template for backend environment variables
-    └── .env                 # Local backend environment file
+    └── .env                 # Local backend environment file (gitignored)
 ```
 
 ---
 
-## Getting Started Locally
+## Quick Start (Windows)
 
-### Prerequisites
-- **Node.js**: v18+ (tested on Node v22)
-- **Python**: 3.10+ (tested on Python 3.13)
-- **Git**
+Simply double-click:
+```cmd
+start.bat
+```
+This will check dependencies, launch both backend and frontend servers, and open `http://localhost:5173` in your default browser.
 
 ---
+
+## Manual Local Setup
 
 ### 1. Backend Setup
+```bash
+cd backend
+python -m venv .venv
 
-1. Navigate to the backend directory:
-   ```bash
-   cd backend
-   ```
+# Windows (PowerShell)
+.\.venv\Scripts\Activate.ps1
+# Linux / macOS
+source .venv/bin/activate
 
-2. Create and activate a Python virtual environment:
-   ```bash
-   # Windows (PowerShell)
-   python -m venv .venv
-   .\.venv\Scripts\Activate.ps1
-
-   # Linux / macOS
-   python3 -m venv .venv
-   source .venv/bin/activate
-   ```
-
-3. Install backend dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. Configure environment variables:
-   ```bash
-   cp .env.example .env
-   ```
-
-5. Start the FastAPI server:
-   ```bash
-   uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-   ```
-
-6. Verify the health check endpoint:
-   - Endpoint: `http://localhost:8000/api/health`
-   - Interactive Swagger Docs: `http://localhost:8000/docs`
-   - ReDoc: `http://localhost:8000/redoc`
-
----
+pip install -r requirements.txt
+cp .env.example .env
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+- Health Check: `http://localhost:8000/api/health`
+- Swagger Docs: `http://localhost:8000/docs`
 
 ### 2. Frontend Setup
-
-1. Open a new terminal and navigate to the frontend directory:
-   ```bash
-   cd frontend
-   ```
-
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-3. Configure environment variables:
-   ```bash
-   cp .env.example .env
-   ```
-
-4. Start the Vite development server:
-   ```bash
-   npm run dev
-   ```
-
-5. Access the application in your browser at `http://localhost:5173`.
+```bash
+cd frontend
+npm install
+cp .env.example .env
+npm run dev
+```
+- Web Application: `http://localhost:5173`
 
 ---
 
@@ -180,12 +161,5 @@ SecureDrop/
 | Variable | Description | Default (Dev) |
 | :--- | :--- | :--- |
 | `VITE_API_BASE_URL` | Base URL of the backend FastAPI service | `http://localhost:8000` |
-
----
-
-## Current Limitations & Roadmap
-
-- **Phase 1 (Current):** Clean architectural foundation, modular folder structure, environment variable handling, CORS configuration, and decoupled health check connectivity.
-- **Phase 2 (Upcoming):** Database integration with Supabase / PostgreSQL and user authentication.
-- **Phase 3 (Upcoming):** Asymmetric key generation (RSA) and key exchange management.
-- **Phase 4 (Upcoming):** Client-side symmetric file encryption (AES), file integrity validation (SHA-256), and secure chunked storage.
+| `VITE_SUPABASE_URL` | Supabase Project URL | `https://your-project.supabase.co` |
+| `VITE_SUPABASE_ANON_KEY` | Supabase Anon Public Key | `your-anon-key` |
