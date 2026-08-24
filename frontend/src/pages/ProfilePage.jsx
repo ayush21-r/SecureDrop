@@ -1,25 +1,93 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   User,
   Mail,
-  KeyRound,
-  ShieldCheck,
   Calendar,
   Copy,
+  Check,
   LogOut,
   Fingerprint,
-  Info,
+  Shield,
+  KeyRound,
+  Loader2,
+  AlertTriangle,
+  CheckCircle2,
+  Play,
+  RefreshCw,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import Card from '../components/Card';
 import Button from '../components/Button';
 import StatusBadge from '../components/StatusBadge';
 import { useAuth } from '../context/AuthContext';
+import {
+  initializeCryptoIdentity,
+  runRSASelfTest,
+} from '../services/cryptoService';
 
 export default function ProfilePage() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+
+  const [cryptoState, setCryptoState] = useState({
+    loading: true,
+    status: 'initializing',
+    publicKeyPem: null,
+    fingerprint: null,
+    publicKey: null,
+    privateKey: null,
+    error: null,
+  });
+
+  const [copied, setCopied] = useState(false);
+  const [testingCrypto, setTestingCrypto] = useState(false);
+  const [testResult, setTestResult] = useState(null);
+
+  const loadIdentity = async () => {
+    if (!user) return;
+    setCryptoState((prev) => ({ ...prev, loading: true, error: null }));
+
+    const result = await initializeCryptoIdentity(user.id);
+    setCryptoState({
+      loading: false,
+      status: result.status,
+      publicKeyPem: result.publicKeyPem || null,
+      fingerprint: result.fingerprint || null,
+      publicKey: result.publicKey || null,
+      privateKey: result.privateKey || null,
+      error: result.error || null,
+    });
+  };
+
+  useEffect(() => {
+    loadIdentity();
+  }, [user]);
+
+  const handleCopyKey = () => {
+    if (cryptoState.publicKeyPem) {
+      navigator.clipboard.writeText(cryptoState.publicKeyPem);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    }
+  };
+
+  const handleRunSelfTest = async () => {
+    if (!cryptoState.publicKey || !cryptoState.privateKey) {
+      setTestResult({
+        success: false,
+        error: 'Cannot run self-test: RSA key pair is not fully available on this device.',
+      });
+      return;
+    }
+
+    setTestingCrypto(true);
+    setTestResult(null);
+
+    const result = await runRSASelfTest(cryptoState.publicKey, cryptoState.privateKey);
+    setTestingCrypto(false);
+    setTestResult(result);
+  };
 
   const handleLogout = async () => {
     await signOut();
@@ -41,17 +109,12 @@ export default function ProfilePage() {
       })
     : 'Active Session';
 
-  const dummyPublicKey = `-----BEGIN PUBLIC KEY-----
-MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEA0J8h7Yq5z0rGZpQ8N
-w8v+3V7s8d9k0fG2H1j4K...[RSA-4096 Public Key Placeholder]...
------END PUBLIC KEY-----`;
-
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <PageHeader
-        title="Account & Security Profile"
-        description="Manage your cryptographic credentials and identity within SecureDrop."
-        badge={<StatusBadge status="active" label="Authenticated (Supabase Auth)" />}
+        title="Account & Cryptographic Identity"
+        description="Manage your persistent RSA cryptographic identity, credentials, and local vault security."
+        badge={<StatusBadge status="active" label="Supabase Auth Active" />}
         action={
           <Button variant="danger" size="sm" icon={LogOut} onClick={handleLogout}>
             Sign Out
@@ -61,7 +124,7 @@ w8v+3V7s8d9k0fG2H1j4K...[RSA-4096 Public Key Placeholder]...
 
       <div className="space-y-8">
         {/* User Identity Information */}
-        <Card title="User Identity" subtitle="Account credentials managed by Supabase Auth">
+        <Card title="User Identity" subtitle="Account credentials authenticated by Supabase">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div className="flex items-center space-x-3 p-3 rounded-lg bg-slate-900 border border-slate-800">
               <div className="p-2.5 rounded-lg bg-slate-800 text-slate-300">
@@ -107,80 +170,187 @@ w8v+3V7s8d9k0fG2H1j4K...[RSA-4096 Public Key Placeholder]...
           </div>
         </Card>
 
-        {/* Cryptographic Key Information Placeholder */}
+        {/* Cryptographic Identity Card */}
         <Card
-          title="RSA Public Key"
-          subtitle="Peers use this public key to encrypt AES symmetric session keys for you"
-          action={<StatusBadge status="verified" label="Key Registered" />}
+          title="Cryptographic Identity"
+          subtitle="Your persistent RSA-OAEP 2048-bit key pair for asymmetric security"
+          action={
+            cryptoState.loading ? (
+              <span className="inline-flex items-center space-x-1.5 text-xs text-slate-400">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+                <span>Initializing Key Pair...</span>
+              </span>
+            ) : cryptoState.status === 'active' ? (
+              <StatusBadge status="ready" label="🔐 RSA Key Pair Active" />
+            ) : cryptoState.status === 'private_key_missing' ? (
+              <StatusBadge status="error" label="⚠️ Private Key Missing" />
+            ) : (
+              <StatusBadge status="pending" label="Identity Pending" />
+            )
+          }
         >
-          <div className="mb-4 p-3 rounded-lg bg-slate-900 border border-slate-800 flex items-start space-x-3 text-xs text-slate-300">
-            <Info className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-            <div>
-              <span className="font-semibold text-white">Phase 1 Architecture Placeholder: </span>
-              In-browser Web Crypto key pair generation (RSA-OAEP 4096) will be implemented in Phase 3.
+          {/* Missing Private Key Alert */}
+          {cryptoState.status === 'private_key_missing' && (
+            <div className="mb-4 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300 flex items-start space-x-3">
+              <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <span className="font-semibold text-amber-200">
+                  Private Key Not Found on This Browser:
+                </span>
+                <p className="text-[11px] text-amber-300 leading-relaxed">
+                  Your public key is registered in Supabase, but your private key is not in this device's IndexedDB. Generating a new key is disabled to prevent previous files from becoming undecryptable.
+                </p>
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Cryptography Initialization Error Alert */}
+          {cryptoState.error && cryptoState.status !== 'private_key_missing' && (
+            <div className="mb-4 p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 flex items-center justify-between">
+              <span>{cryptoState.error}</span>
+              <Button variant="outline" size="sm" onClick={loadIdentity}>
+                Retry
+              </Button>
+            </div>
+          )}
 
           <div className="space-y-4">
+            {/* Key Properties Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-mono">
-              <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
-                <div className="text-slate-400 text-[11px]">Algorithm</div>
-                <div className="text-white mt-1">RSA-OAEP</div>
+              <div className="p-3.5 rounded-lg bg-slate-900 border border-slate-800">
+                <div className="text-slate-400 text-[11px] font-sans">Algorithm</div>
+                <div className="text-white font-semibold mt-1">RSA-OAEP</div>
               </div>
-              <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
-                <div className="text-slate-400 text-[11px]">Key Length</div>
-                <div className="text-white mt-1">4096 bits</div>
+              <div className="p-3.5 rounded-lg bg-slate-900 border border-slate-800">
+                <div className="text-slate-400 text-[11px] font-sans">Key Length &amp; Hash</div>
+                <div className="text-white font-semibold mt-1">2048-bit (SHA-256)</div>
               </div>
-              <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
-                <div className="text-slate-400 text-[11px]">Fingerprint</div>
-                <div className="text-emerald-400 mt-1 truncate" title="SHA256:7f9e8a3b2c1d0e4f...">
-                  SHA256:7f9e8a...4f
+              <div className="p-3.5 rounded-lg bg-slate-900 border border-slate-800">
+                <div className="text-slate-400 text-[11px] font-sans">Public Key Fingerprint</div>
+                <div
+                  className="text-emerald-400 font-semibold mt-1 truncate"
+                  title={cryptoState.fingerprint || 'Generating...'}
+                >
+                  {cryptoState.fingerprint || 'Initializing...'}
                 </div>
               </div>
             </div>
 
+            {/* Public Key Display */}
             <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1.5 font-sans">
-                Public Key Block (PEM)
-              </label>
-              <div className="relative">
-                <pre className="p-3.5 rounded-lg bg-slate-950 border border-slate-800 text-[11px] font-mono text-slate-300 overflow-x-auto leading-relaxed">
-                  {dummyPublicKey}
-                </pre>
-                <button
-                  type="button"
-                  onClick={() => alert("Public key copied to clipboard (demo mode)")}
-                  className="absolute top-2.5 right-2.5 p-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
-                  title="Copy public key"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                </button>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-medium text-slate-300 font-sans">
+                  Registered RSA Public Key (PEM)
+                </label>
+                <span className="text-[11px] text-slate-400 font-sans">
+                  Stored in <code className="font-mono text-emerald-400">user_public_keys</code>
+                </span>
               </div>
+              <div className="relative">
+                <pre className="p-3.5 rounded-lg bg-slate-950 border border-slate-800 text-[11px] font-mono text-slate-300 overflow-x-auto leading-relaxed max-h-44">
+                  {cryptoState.publicKeyPem || (
+                    <span className="text-slate-400 italic">Loading registered public key...</span>
+                  )}
+                </pre>
+                {cryptoState.publicKeyPem && (
+                  <button
+                    type="button"
+                    onClick={handleCopyKey}
+                    className="absolute top-2.5 right-2.5 p-1.5 rounded-md bg-slate-850 hover:bg-slate-800 text-slate-300 transition-colors border border-slate-750 flex items-center space-x-1 text-[11px]"
+                    title="Copy Public Key PEM"
+                  >
+                    {copied ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        <span className="text-emerald-400 font-sans">Copied</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span className="font-sans">Copy</span>
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Self-Test Verification Section */}
+            <div className="pt-2 border-t border-slate-800/80">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <div className="text-xs font-semibold text-white">
+                    Web Crypto RSA Self-Test
+                  </div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">
+                    Encrypts a sample payload with your public key and decrypts it with your local private key.
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  icon={testingCrypto ? Loader2 : Play}
+                  loading={testingCrypto}
+                  disabled={testingCrypto || cryptoState.status !== 'active'}
+                  onClick={handleRunSelfTest}
+                >
+                  {testingCrypto ? 'Testing...' : 'Run RSA Self-Test'}
+                </Button>
+              </div>
+
+              {/* Test Result Display */}
+              {testResult && (
+                <div
+                  className={`mt-3 p-3.5 rounded-lg border text-xs flex items-start space-x-2.5 ${
+                    testResult.success
+                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                      : 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+                  }`}
+                >
+                  {testResult.success ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                  )}
+                  <div className="space-y-1">
+                    <span className="font-semibold text-white">
+                      {testResult.success
+                        ? '✓ RSA Web Crypto Test Passed'
+                        : 'RSA Test Failed'}
+                    </span>
+                    <p className="text-[11px] leading-relaxed">
+                      {testResult.success
+                        ? `Successfully encrypted test payload "${testResult.testMessage}" with RSA-OAEP 2048-bit public key and decrypted back with private key.`
+                        : testResult.error}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </Card>
 
-        {/* Security Preferences */}
+        {/* Security & Device Controls */}
         <Card title="Security & Device Controls">
           <div className="space-y-4 text-xs text-slate-300">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <div>
-                <div className="font-medium text-white">Local Key Storage</div>
+                <div className="font-medium text-white">Local IndexedDB Key Isolation</div>
                 <div className="text-slate-400 text-[11px] mt-0.5">
-                  Private keys are stored in encrypted IndexedDB client storage.
+                  Private keys are isolated in browser IndexedDB and never transmitted over the network.
                 </div>
               </div>
-              <StatusBadge status="verified" label="Secure" />
+              <StatusBadge status="ready" label="Enforced" />
             </div>
 
             <div className="flex items-center justify-between">
               <div>
-                <div className="font-medium text-white">SHA-256 Hash Verification</div>
+                <div className="font-medium text-white">Public Key Registration</div>
                 <div className="text-slate-400 text-[11px] mt-0.5">
-                  Automatically verify checksum before saving decrypted files.
+                  Public keys are registered in Supabase for peer recipient lookup.
                 </div>
               </div>
-              <StatusBadge status="verified" label="Enforced" />
+              <StatusBadge status="ready" label="Synced" />
             </div>
           </div>
         </Card>
