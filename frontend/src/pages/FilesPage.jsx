@@ -11,8 +11,9 @@ import {
   RefreshCw,
   X,
   FileDown,
-  User,
-  Clock,
+  Lock,
+  Unlock,
+  ShieldCheck,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import Card from '../components/Card';
@@ -21,7 +22,7 @@ import Input from '../components/Input';
 import StatusBadge from '../components/StatusBadge';
 import EmptyState from '../components/EmptyState';
 import { useAuth } from '../context/AuthContext';
-import { fetchUserFiles, downloadFile } from '../services/fileService';
+import { fetchUserFiles, downloadAndDecryptFile } from '../services/fileService';
 
 export default function FilesPage() {
   const { user } = useAuth();
@@ -64,23 +65,26 @@ export default function FilesPage() {
     setDownloadSuccess(null);
 
     if (file.status === 'deleted') {
-      setDownloadError(`Cannot download "${file.original_filename}": File is marked as deleted.`);
+      setDownloadError(`Cannot download "${file.original_filename}": File is no longer available.`);
       return;
     }
 
     setDownloadingId(file.id);
 
-    const result = await downloadFile({
-      storagePath: file.storage_path,
-      originalFilename: file.original_filename,
-      status: file.status,
+    const result = await downloadAndDecryptFile({
+      fileRecord: file,
+      currentUserId: user.id,
     });
 
     setDownloadingId(null);
 
     if (result.success) {
-      setDownloadSuccess(`Downloaded "${file.original_filename}" successfully.`);
-      setTimeout(() => setDownloadSuccess(null), 5000);
+      if (file.is_encrypted) {
+        setDownloadSuccess(`File "${file.original_filename}" decrypted and downloaded successfully.`);
+      } else {
+        setDownloadSuccess(`File "${file.original_filename}" downloaded successfully.`);
+      }
+      setTimeout(() => setDownloadSuccess(null), 6000);
     } else {
       setDownloadError(result.error);
     }
@@ -129,8 +133,8 @@ export default function FilesPage() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <PageHeader
         title="My Files"
-        description="Securely access and download files sent to you or inspect your outgoing transfers."
-        badge={<StatusBadge status="active" label="Phase 2.3 — Receive & Download" />}
+        description="Access, client-side decrypt, and securely download files received from your peers."
+        badge={<StatusBadge status="ready" label="Phase 3.3 — Decrypt & Download" />}
         action={
           <button
             type="button"
@@ -145,12 +149,12 @@ export default function FilesPage() {
         }
       />
 
-      {/* Download Success Alert */}
+      {/* Decrypt & Download Success Alert */}
       {downloadSuccess && (
         <div className="mb-6 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-300 flex items-center justify-between shadow-md">
           <div className="flex items-center space-x-2.5">
             <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span>{downloadSuccess}</span>
+            <span className="font-medium text-white">{downloadSuccess}</span>
           </div>
           <button
             type="button"
@@ -162,12 +166,13 @@ export default function FilesPage() {
         </div>
       )}
 
-      {/* Download Error Alert */}
+      {/* Download / Decrypt Error Alert */}
       {downloadError && (
-        <div className="mb-6 p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 flex items-center justify-between shadow-md">
-          <div className="flex items-center space-x-2.5">
-            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-            <span>{downloadError}</span>
+        <div className="mb-6 p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 flex items-start space-x-3 shadow-md">
+          <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+          <div className="flex-1 space-y-0.5">
+            <span className="font-semibold text-rose-200">Decryption Failed: </span>
+            <p className="text-rose-300 leading-relaxed">{downloadError}</p>
           </div>
           <button
             type="button"
@@ -276,6 +281,7 @@ export default function FilesPage() {
                 {filteredFiles.map((file) => {
                   const isDownloading = downloadingId === file.id;
                   const isDeleted = file.status === 'deleted';
+                  const isEncrypted = Boolean(file.is_encrypted);
 
                   const peerName =
                     activeTab === 'received'
@@ -307,13 +313,14 @@ export default function FilesPage() {
                             </div>
                             <div className="flex items-center space-x-2 text-[11px] text-slate-400 mt-0.5 truncate">
                               <span>{file.content_type || 'application/octet-stream'}</span>
-                              {file.is_encrypted ? (
-                                <span className="inline-flex items-center text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded border border-emerald-500/20 font-mono">
-                                  AES-256
+                              {isEncrypted ? (
+                                <span className="inline-flex items-center space-x-1 text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 font-mono">
+                                  <Lock className="w-2.5 h-2.5" />
+                                  <span>AES-GCM-256</span>
                                 </span>
                               ) : (
-                                <span className="text-[10px] text-slate-500 font-mono">
-                                  Legacy
+                                <span className="inline-flex items-center text-[10px] text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700 font-mono">
+                                  Legacy (Unencrypted)
                                 </span>
                               )}
                             </div>
@@ -363,25 +370,43 @@ export default function FilesPage() {
                         />
                       </td>
 
-                      {/* Download Action */}
+                      {/* Action Button: Decrypt & Download or Download */}
                       <td className="py-4 text-right">
                         <Button
-                          variant={activeTab === 'received' ? 'primary' : 'secondary'}
+                          variant={
+                            activeTab === 'received'
+                              ? isEncrypted
+                                ? 'primary'
+                                : 'primary'
+                              : 'secondary'
+                          }
                           size="sm"
-                          icon={isDownloading ? Loader2 : Download}
+                          icon={
+                            isDownloading
+                              ? Loader2
+                              : isEncrypted
+                              ? Unlock
+                              : Download
+                          }
                           loading={isDownloading}
                           disabled={isDownloading || isDeleted}
                           onClick={() => handleDownload(file)}
                           title={
                             isDeleted
                               ? 'File is no longer available.'
+                              : isEncrypted
+                              ? `Decrypt and download ${file.original_filename}`
                               : `Download ${file.original_filename}`
                           }
                         >
                           {isDownloading
-                            ? 'Downloading...'
+                            ? isEncrypted
+                              ? 'Decrypting...'
+                              : 'Downloading...'
                             : isDeleted
                             ? 'Unavailable'
+                            : isEncrypted
+                            ? 'Decrypt & Download'
                             : 'Download'}
                         </Button>
                       </td>
@@ -405,8 +430,8 @@ export default function FilesPage() {
               searchQuery
                 ? 'Try adjusting your search query or clear the filter.'
                 : activeTab === 'received'
-                ? 'Files sent to you by other registered users will appear here for secure download.'
-                : 'You have not sent any files yet. Use the Send File page to transfer files to other users.'
+                ? 'Encrypted files sent to you by other registered users will appear here for client-side decryption.'
+                : 'You have not sent any files yet. Use the Send File page to transfer encrypted files to other users.'
             }
             actionLabel={
               searchQuery

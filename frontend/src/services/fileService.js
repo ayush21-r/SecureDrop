@@ -6,7 +6,11 @@ import {
   generateRandomIV,
   encryptFileWithAES,
   encryptAESKeyWithRSA,
+  decryptAESKeyWithRSA,
+  decryptFileWithAES,
+  getPrivateKeyLocally,
   bufferToBase64,
+  base64ToBuffer,
 } from './cryptoService';
 
 // 50 MB standard maximum upload limit
@@ -372,6 +376,173 @@ export async function downloadFile({ storagePath, originalFilename, status }) {
     return {
       success: false,
       error: err.message || 'Failed to download file.',
+    };
+  }
+}
+
+/**
+ * Download and client-side decrypt an encrypted file using the receiver's local RSA private key.
+ *
+ * Full Lifecycle:
+ * 1. Validates authentication & file status.
+ * 2. If unencrypted (Phase 2 legacy), delegates to standard downloadFile.
+ * 3. Retrieves receiver's local RSA private key from IndexedDB.
+ * 4. Downloads the encrypted ciphertext (.enc) from Supabase Storage.
+ * 5. Uses RSA-OAEP-2048 to decrypt the AES session key.
+ * 6. Uses AES-GCM-256 and IV to decrypt the file ciphertext.
+ * 7. Creates plaintext Blob and triggers browser download with the original filename.
+ * 8. Ensures the private key and decrypted plaintext NEVER touch the network or database.
+ *
+ * @param {Object} params
+ * @param {Object} params.fileRecord - File metadata record from public.files
+ * @param {string} params.currentUserId - Authenticated user UUID
+ * @param {Function} [params.onProgressStage] - Optional callback for UI stage reporting
+ * @returns {Promise<{ success: boolean, error?: string }>}
+ */
+export async function downloadAndDecryptFile({ fileRecord, currentUserId, onProgressStage }) {
+  if (!isSupabaseConfigured) {
+    return { success: false, error: 'Supabase credentials are not configured.' };
+  }
+
+  if (!fileRecord) {
+    return { success: false, error: 'File record is required.' };
+  }
+
+  if (fileRecord.status === 'deleted') {
+    return { success: false, error: 'File is no longer available.' };
+  }
+
+  // Fallback for Phase 2 unencrypted legacy files
+  if (!fileRecord.is_encrypted) {
+    return await downloadFile({
+      storagePath: fileRecord.storage_path,
+      originalFilename: fileRecord.original_filename,
+      status: fileRecord.status,
+    });
+  }
+
+  // 1. Validate encryption metadata
+  if (!fileRecord.encrypted_key || !fileRecord.iv) {
+    return {
+      success: false,
+      error: 'File encryption metadata is incomplete.',
+    };
+  }
+
+  if (
+    fileRecord.encryption_algorithm &&
+    fileRecord.encryption_algorithm !== 'AES-GCM-256' &&
+    fileRecord.encryption_algorithm !== 'AES-GCM'
+  ) {
+    return {
+      success: false,
+      error: 'This file uses an unsupported encryption algorithm.',
+    };
+  }
+
+  if (
+    fileRecord.key_encryption_algorithm &&
+    fileRecord.key_encryption_algorithm !== 'RSA-OAEP-2048' &&
+    fileRecord.key_encryption_algorithm !== 'RSA-OAEP'
+  ) {
+    return {
+      success: false,
+      error: 'This file uses an unsupported key encryption algorithm.',
+    };
+  }
+
+  try {
+    // 2. Retrieve local RSA private key from IndexedDB
+    if (onProgressStage) onProgressStage('fetching_private_key');
+
+    const keyLookupId = currentUserId || fileRecord.receiver_id;
+    const localKeys = await getPrivateKeyLocally(keyLookupId);
+
+    if (!localKeys || !localKeys.privateKey) {
+      return {
+        success: false,
+        error:
+          'Your local RSA private key could not be found on this device. This file cannot be decrypted here.',
+      };
+    }
+
+    // 3. Download encrypted ciphertext from private Storage bucket
+    if (onProgressStage) onProgressStage('downloading_ciphertext');
+
+    const { data: encryptedBlob, error: downloadError } = await supabase.storage
+      .from(STORAGE_BUCKET_NAME)
+      .download(fileRecord.storage_path);
+
+    if (downloadError || !encryptedBlob) {
+      console.error('Storage download error:', downloadError?.message);
+      return {
+        success: false,
+        error: 'Unable to retrieve the encrypted file from secure storage.',
+      };
+    }
+
+    // 4. Decrypt AES session key using recipient's local RSA private key
+    if (onProgressStage) onProgressStage('decrypting_key');
+
+    let rawAesKeyBuffer;
+    try {
+      const encryptedKeyBuffer = base64ToBuffer(fileRecord.encrypted_key);
+      rawAesKeyBuffer = await decryptAESKeyWithRSA(encryptedKeyBuffer, localKeys.privateKey);
+    } catch (rsaErr) {
+      console.error('RSA session key decryption error:', rsaErr);
+      return {
+        success: false,
+        error:
+          'Unable to decrypt the file encryption key. The local cryptographic identity may not match this file.',
+      };
+    }
+
+    // 5. Decrypt ciphertext using recovered AES-256 key and IV
+    if (onProgressStage) onProgressStage('decrypting_payload');
+
+    let decryptedPlaintextBuffer;
+    try {
+      const ciphertextBuffer = await encryptedBlob.arrayBuffer();
+      const ivBuffer = base64ToBuffer(fileRecord.iv);
+      decryptedPlaintextBuffer = await decryptFileWithAES(
+        ciphertextBuffer,
+        rawAesKeyBuffer,
+        ivBuffer
+      );
+    } catch (aesErr) {
+      console.error('AES payload decryption error:', aesErr);
+      return {
+        success: false,
+        error: 'Unable to decrypt the file. The encrypted data may be corrupted or incompatible.',
+      };
+    }
+
+    // 6. Create plaintext Blob and trigger browser download with original filename
+    if (onProgressStage) onProgressStage('saving_file');
+
+    const plaintextBlob = new Blob([decryptedPlaintextBuffer], {
+      type: fileRecord.content_type || 'application/octet-stream',
+    });
+
+    const objectUrl = window.URL.createObjectURL(plaintextBlob);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = fileRecord.original_filename || 'decrypted_file';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    // Clean up temporary in-memory object URL
+    setTimeout(() => {
+      window.URL.revokeObjectURL(objectUrl);
+    }, 150);
+
+    return { success: true };
+  } catch (err) {
+    console.error('Unexpected error during client-side decryption:', err);
+    return {
+      success: false,
+      error: err.message || 'An unexpected error occurred during file decryption.',
     };
   }
 }

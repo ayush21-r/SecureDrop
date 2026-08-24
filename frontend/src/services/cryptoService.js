@@ -289,6 +289,50 @@ export async function encryptAESKeyWithRSA(rawAesKeyBuffer, recipientPublicKey) 
 }
 
 /**
+ * Decrypt the RSA-OAEP encrypted AES key buffer using the recipient's local RSA private key.
+ * @param {ArrayBuffer} encryptedKeyBuffer - Raw encrypted AES key
+ * @param {CryptoKey} privateKey - Recipient's local RSA-OAEP private key
+ * @returns {Promise<ArrayBuffer>} Raw 32-byte AES key
+ */
+export async function decryptAESKeyWithRSA(encryptedKeyBuffer, privateKey) {
+  return await window.crypto.subtle.decrypt(
+    {
+      name: 'RSA-OAEP',
+    },
+    privateKey,
+    encryptedKeyBuffer
+  );
+}
+
+/**
+ * Decrypt ciphertext buffer using AES-GCM 256-bit with recovered AES key and IV.
+ * @param {ArrayBuffer} ciphertextBuffer - Encrypted file data with auth tag
+ * @param {ArrayBuffer} rawAesKeyBuffer - Raw 32-byte AES key
+ * @param {ArrayBuffer | Uint8Array} iv - 12-byte initialization vector
+ * @returns {Promise<ArrayBuffer>} Plaintext file buffer
+ */
+export async function decryptFileWithAES(ciphertextBuffer, rawAesKeyBuffer, iv) {
+  const aesKey = await window.crypto.subtle.importKey(
+    'raw',
+    rawAesKeyBuffer,
+    AES_CONFIG,
+    false,
+    ['decrypt']
+  );
+
+  const ivArray = iv instanceof Uint8Array ? iv : new Uint8Array(iv);
+
+  return await window.crypto.subtle.decrypt(
+    {
+      name: 'AES-GCM',
+      iv: ivArray,
+    },
+    aesKey,
+    ciphertextBuffer
+  );
+}
+
+/**
  * Convert ArrayBuffer or Uint8Array to standard Base64 string.
  * @param {ArrayBuffer | Uint8Array} buffer
  * @returns {string}
