@@ -11,6 +11,7 @@ export default function Input({
   error,
   helperText,
   icon: Icon,
+  endAdornment,
   disabled = false,
   required = false,
   className = '',
@@ -48,13 +49,19 @@ export default function Input({
           placeholder={placeholder}
           className={`w-full rounded-lg bg-slate-900/80 border text-slate-100 text-sm placeholder:text-slate-500 transition-colors focus:outline-none focus:ring-1 ${
             Icon ? 'pl-9' : 'pl-3.5'
-          } pr-3.5 py-2.5 ${
+          } ${endAdornment ? 'pr-10' : 'pr-3.5'} py-2.5 ${
             error
               ? 'border-rose-500 focus:border-rose-500 focus:ring-rose-500'
               : 'border-slate-800 focus:border-emerald-500 focus:ring-emerald-500'
           } ${disabled ? 'opacity-50 cursor-not-allowed bg-slate-900' : ''}`}
           {...props}
         />
+
+        {endAdornment && (
+          <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+            {endAdornment}
+          </div>
+        )}
       </div>
 
       {error ? (

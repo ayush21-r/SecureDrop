@@ -59,7 +59,7 @@ export default function Navbar() {
               SecureDrop
             </span>
             <span className="hidden sm:inline-block ml-2.5 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 rounded-full border border-emerald-500/20">
-              Phase 1
+              E2EE Vault
             </span>
           </div>
         </Link>

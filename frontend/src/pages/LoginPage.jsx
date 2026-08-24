@@ -7,6 +7,8 @@ import {
   LogIn,
   AlertCircle,
   Settings,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import Button from '../components/Button';
 import Input from '../components/Input';
@@ -20,6 +22,7 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [authError, setAuthError] = useState(null);
@@ -120,7 +123,7 @@ export default function LoginPage() {
             <Input
               label="Password"
               name="password"
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               placeholder="••••••••••••"
               required
               icon={Lock}
@@ -131,6 +134,21 @@ export default function LoginPage() {
                 if (authError) setAuthError(null);
               }}
               error={errors.password}
+              endAdornment={
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="text-slate-400 hover:text-slate-200 focus:outline-none focus:text-white p-1 rounded transition-colors"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  title={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </button>
+              }
             />
 
             <div className="pt-2">

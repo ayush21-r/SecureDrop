@@ -9,6 +9,8 @@ import {
   AlertCircle,
   CheckCircle2,
   Settings,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import Button from '../components/Button';
 import Input from '../components/Input';
@@ -26,6 +28,8 @@ export default function RegisterPage() {
     confirmPassword: '',
   });
 
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [authError, setAuthError] = useState(null);
@@ -138,7 +142,7 @@ export default function RegisterPage() {
         {/* Success Confirmation */}
         {successInfo && (
           <div className="mb-6 p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-300 flex items-start space-x-3">
-            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
             <div className="space-y-2">
               <p className="font-medium text-white">{successInfo}</p>
               <Link
@@ -180,25 +184,55 @@ export default function RegisterPage() {
               <Input
                 label="Password"
                 name="password"
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 placeholder="Minimum 6 characters"
                 required
                 icon={Lock}
                 value={formData.password}
                 onChange={handleChange}
                 error={errors.password}
+                endAdornment={
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="text-slate-400 hover:text-slate-200 focus:outline-none focus:text-white p-1 rounded transition-colors"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    title={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </button>
+                }
               />
 
               <Input
                 label="Confirm Password"
                 name="confirmPassword"
-                type="password"
+                type={showConfirmPassword ? 'text' : 'password'}
                 placeholder="Repeat password"
                 required
                 icon={Lock}
                 value={formData.confirmPassword}
                 onChange={handleChange}
                 error={errors.confirmPassword}
+                endAdornment={
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="text-slate-400 hover:text-slate-200 focus:outline-none focus:text-white p-1 rounded transition-colors"
+                    aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                    title={showConfirmPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showConfirmPassword ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </button>
+                }
               />
 
               <div className="text-xs text-slate-400 pt-1">
