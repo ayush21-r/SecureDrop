@@ -12,13 +12,21 @@ import {
   HardDrive,
   Shield,
   RefreshCw,
+  Lock,
+  KeyRound,
+  Play,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import Card from '../components/Card';
 import Button from '../components/Button';
 import StatusBadge from '../components/StatusBadge';
 import { useAuth } from '../context/AuthContext';
-import { fetchReceivers, uploadAndSendFile, MAX_FILE_SIZE_BYTES } from '../services/fileService';
+import {
+  fetchReceivers,
+  uploadAndSendFile,
+  MAX_FILE_SIZE_BYTES,
+} from '../services/fileService';
+import { runHybridCryptoSelfTest } from '../services/cryptoService';
 
 export default function SendFilePage() {
   const { user } = useAuth();
@@ -28,8 +36,13 @@ export default function SendFilePage() {
   const [selectedReceiverId, setSelectedReceiverId] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadStage, setUploadStage] = useState('idle');
   const [successData, setSuccessData] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
+
+  // Self-test states
+  const [testingHybrid, setTestingHybrid] = useState(false);
+  const [hybridTestResult, setHybridTestResult] = useState(null);
 
   const loadReceivers = async () => {
     if (!user) return;
@@ -84,6 +97,7 @@ export default function SendFilePage() {
     setSelectedReceiverId('');
     setSuccessData(null);
     setErrorMessage(null);
+    setUploadStage('idle');
   };
 
   const handleSubmit = async (e) => {
@@ -104,14 +118,17 @@ export default function SendFilePage() {
     }
 
     setUploading(true);
+    setUploadStage('starting');
 
     const result = await uploadAndSendFile({
       file: selectedFile,
       senderId: user.id,
       receiverId: selectedReceiverId,
+      onProgressStage: (stage) => setUploadStage(stage),
     });
 
     setUploading(false);
+    setUploadStage('idle');
 
     if (result.success) {
       const recipientProfile = receivers.find((r) => r.id === selectedReceiverId);
@@ -121,6 +138,8 @@ export default function SendFilePage() {
         fileSize: selectedFile.size,
         recipientName: recipientProfile?.name || recipientProfile?.full_name || 'Recipient',
         recipientEmail: recipientProfile?.email || '',
+        encryptionAlgorithm: result.data?.encryption_algorithm || 'AES-GCM-256',
+        keyEncryptionAlgorithm: result.data?.key_encryption_algorithm || 'RSA-OAEP-2048',
       });
       // Clear inputs
       setSelectedFile(null);
@@ -128,6 +147,14 @@ export default function SendFilePage() {
     } else {
       setErrorMessage(result.error);
     }
+  };
+
+  const handleRunHybridTest = async () => {
+    setTestingHybrid(true);
+    setHybridTestResult(null);
+    const result = await runHybridCryptoSelfTest();
+    setTestingHybrid(false);
+    setHybridTestResult(result);
   };
 
   const formatFileSize = (bytes) => {
@@ -138,14 +165,31 @@ export default function SendFilePage() {
     return `${kb.toFixed(2)} KB`;
   };
 
+  const getStageLabel = () => {
+    switch (uploadStage) {
+      case 'fetching_key':
+        return 'Verifying recipient RSA public key...';
+      case 'encrypting_file':
+        return 'Encrypting file with AES-256-GCM...';
+      case 'protecting_key':
+        return 'Protecting encryption key with RSA-OAEP...';
+      case 'uploading_encrypted':
+        return 'Uploading encrypted ciphertext to vault...';
+      case 'saving_metadata':
+        return 'Registering encrypted metadata...';
+      default:
+        return 'Securing and Uploading...';
+    }
+  };
+
   const selectedReceiverObj = receivers.find((r) => r.id === selectedReceiverId);
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <PageHeader
         title="Send File"
-        description="Select a registered recipient and upload a file to the secure storage vault."
-        badge={<StatusBadge status="active" label="Phase 2.2 — Storage & Metadata" />}
+        description="Select a registered recipient. Files are encrypted client-side with AES-256-GCM and session keys are encapsulated with recipient's RSA-OAEP key."
+        badge={<StatusBadge status="ready" label="🔐 AES-256 + RSA-OAEP Enabled" />}
       />
 
       {/* Success Banner */}
@@ -156,19 +200,19 @@ export default function SendFilePage() {
               <CheckCircle2 className="w-6 h-6 text-emerald-400 shrink-0 mt-0.5" />
               <div>
                 <h3 className="text-base font-semibold text-white">
-                  File Uploaded and Sent Successfully!
+                  File Encrypted and Sent Successfully!
                 </h3>
                 <p className="text-xs text-emerald-300 mt-1">
-                  Your file has been safely uploaded to the <code className="font-mono text-emerald-200">secure-files</code> storage bucket and registered in the database.
+                  Your file was encrypted with a unique AES-256 session key, protected with the recipient's RSA public key, and stored securely.
                 </p>
 
-                <div className="mt-4 p-3 rounded-lg bg-slate-950/60 border border-emerald-500/20 text-xs font-mono space-y-1 text-slate-200">
+                <div className="mt-4 p-3 rounded-lg bg-slate-950/60 border border-emerald-500/20 text-xs font-mono space-y-1.5 text-slate-200">
                   <div className="flex justify-between">
                     <span className="text-slate-400">File:</span>
                     <span className="text-white font-medium">{successData.originalFilename}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Size:</span>
+                    <span className="text-slate-400">Plaintext Size:</span>
                     <span>{formatFileSize(successData.fileSize)}</span>
                   </div>
                   <div className="flex justify-between">
@@ -178,10 +222,12 @@ export default function SendFilePage() {
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Status:</span>
-                    <span className="text-emerald-400 uppercase font-semibold">
-                      {successData.fileRecord?.status || 'available'}
-                    </span>
+                    <span className="text-slate-400">File Encryption:</span>
+                    <span className="text-emerald-400 font-semibold">{successData.encryptionAlgorithm}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Key Protection:</span>
+                    <span className="text-purple-400 font-semibold">{successData.keyEncryptionAlgorithm}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-400">Storage Path:</span>
@@ -208,7 +254,7 @@ export default function SendFilePage() {
         <div className="mb-6 p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 flex items-start space-x-3">
           <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
           <div className="flex-1">
-            <span className="font-semibold text-rose-200">Upload Failed: </span>
+            <span className="font-semibold text-rose-200">Transmission Failed: </span>
             <span>{errorMessage}</span>
           </div>
           <button
@@ -228,7 +274,7 @@ export default function SendFilePage() {
             {/* 1. Recipient Selection */}
             <Card
               title="1. Select Recipient"
-              subtitle="Choose a registered user from the profiles database"
+              subtitle="Recipient's registered RSA public key will encapsulate the AES session key"
               action={
                 <button
                   type="button"
@@ -245,7 +291,7 @@ export default function SendFilePage() {
               {loadingReceivers ? (
                 <div className="flex items-center space-x-2 text-xs text-slate-400 py-3">
                   <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
-                  <span>Loading registered users from profiles table...</span>
+                  <span>Loading registered recipients...</span>
                 </div>
               ) : receivers.length === 0 ? (
                 <div className="p-3.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-400 flex items-center space-x-2.5">
@@ -288,7 +334,7 @@ export default function SendFilePage() {
                         <span className="text-slate-400">({selectedReceiverObj.email})</span>
                       </div>
                       <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                        Selected
+                        RSA Key Target
                       </span>
                     </div>
                   )}
@@ -297,7 +343,7 @@ export default function SendFilePage() {
             </Card>
 
             {/* 2. File Selection */}
-            <Card title="2. Select File" subtitle="Choose a document or binary file to transmit (Max 50 MB)">
+            <Card title="2. Select File" subtitle="Encrypted in-memory via AES-GCM before uploading (Max 50 MB)">
               {!selectedFile ? (
                 <label className="border-2 border-dashed border-slate-800 hover:border-emerald-500/50 rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer bg-slate-900/30 transition-colors group">
                   <div className="p-3 rounded-full bg-slate-800/80 group-hover:bg-emerald-500/10 text-slate-400 group-hover:text-emerald-400 mb-3 transition-colors">
@@ -307,7 +353,7 @@ export default function SendFilePage() {
                     Click to browse or drop file here
                   </span>
                   <span className="text-xs text-slate-400 mt-1">
-                    Up to 50 MB &bull; Stored under your private UUID prefix
+                    Encrypted with unique AES-256 session key &bull; Max 50 MB
                   </span>
                   <input
                     type="file"
@@ -346,8 +392,8 @@ export default function SendFilePage() {
               )}
             </Card>
 
-            {/* 3. Send Action */}
-            <div className="pt-2">
+            {/* 3. Send Action with Stage Feedback */}
+            <div className="pt-2 space-y-2">
               <Button
                 type="submit"
                 size="lg"
@@ -356,60 +402,107 @@ export default function SendFilePage() {
                 loading={uploading}
                 disabled={!selectedFile || !selectedReceiverId || uploading}
               >
-                {uploading ? 'Uploading to Secure Storage...' : 'Send File'}
+                {uploading ? getStageLabel() : 'Encrypt & Send File'}
               </Button>
+
+              {uploading && (
+                <div className="text-center text-xs text-emerald-400 font-mono animate-pulse">
+                  {getStageLabel()}
+                </div>
+              )}
             </div>
           </form>
         </div>
 
-        {/* Storage & Architecture Details Column (1 Col) */}
+        {/* Storage & Hybrid Cryptography Details Column (1 Col) */}
         <div className="space-y-6">
-          <Card title="Upload Pipeline" subtitle="Supabase Storage & Metadata">
+          <Card title="Hybrid Pipeline" subtitle="AES-GCM + RSA-OAEP">
             <div className="space-y-4 text-xs">
               <div className="flex items-center justify-between pb-3 border-b border-slate-800">
                 <div className="flex items-center space-x-2 text-slate-300">
-                  <HardDrive className="w-4 h-4 text-emerald-400" />
-                  <span>Bucket</span>
+                  <Lock className="w-4 h-4 text-emerald-400" />
+                  <span>Payload Cipher</span>
                 </div>
-                <span className="font-mono text-emerald-400">secure-files</span>
+                <span className="font-mono text-emerald-400">AES-GCM-256</span>
               </div>
 
               <div className="flex items-center justify-between pb-3 border-b border-slate-800">
                 <div className="flex items-center space-x-2 text-slate-300">
-                  <Shield className="w-4 h-4 text-emerald-400" />
-                  <span>Access Control</span>
+                  <KeyRound className="w-4 h-4 text-purple-400" />
+                  <span>Key Encapsulation</span>
                 </div>
-                <span className="font-mono text-slate-300">Sender / Receiver RLS</span>
+                <span className="font-mono text-purple-400">RSA-OAEP-2048</span>
               </div>
 
               <div className="flex items-center justify-between pb-3 border-b border-slate-800">
                 <div className="flex items-center space-x-2 text-slate-300">
-                  <UserCheck className="w-4 h-4 text-purple-400" />
-                  <span>Authenticated Sender</span>
+                  <HardDrive className="w-4 h-4 text-slate-400" />
+                  <span>Storage Vault</span>
                 </div>
-                <span className="font-mono text-slate-300 truncate max-w-[110px]" title={user?.id}>
-                  {user?.id ? `${user.id.substring(0, 8)}...` : 'Active'}
-                </span>
+                <span className="font-mono text-slate-300">secure-files (private)</span>
               </div>
 
               <div className="flex items-center justify-between">
-                <span className="text-slate-400">File Status</span>
-                <StatusBadge status="ready" label="Available" />
+                <span className="text-slate-400">Plaintext Upload</span>
+                <StatusBadge status="ready" label="Blocked (0%)" />
               </div>
             </div>
 
             <div className="mt-5 p-3 rounded-lg bg-slate-950/70 border border-slate-800/80 text-[11px] text-slate-400 space-y-1.5 leading-relaxed">
-              <div className="font-medium text-slate-300">Security & Isolation:</div>
-              <div>&bull; Stored path: <code className="font-mono text-emerald-400">&lt;sender_id&gt;/&lt;file&gt;</code></div>
-              <div>&bull; Automatic orphan rollback on database error</div>
-              <div>&bull; RLS strictly enforces sender &amp; receiver isolation</div>
+              <div className="font-medium text-slate-300">Hybrid Security Guarantees:</div>
+              <div>&bull; Fresh random 256-bit AES key generated per file</div>
+              <div>&bull; 96-bit unique IV generated per upload</div>
+              <div>&bull; AES key is protected by recipient's RSA public key</div>
+              <div>&bull; Plaintext file never touches network or storage</div>
             </div>
           </Card>
 
-          <Card title="Future Phase Note">
-            <p className="text-xs text-slate-400 leading-relaxed">
-              In subsequent phases, client-side AES symmetric file encryption and RSA key encapsulation will be layered directly over this upload pipeline before files touch the storage bucket.
-            </p>
+          {/* Cryptography Self-Test in Sidebar */}
+          <Card title="Cryptography Verification">
+            <div className="space-y-3">
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Test the complete AES-256-GCM + RSA-OAEP encryption/decryption loop in your browser.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                icon={testingHybrid ? Loader2 : Play}
+                loading={testingHybrid}
+                disabled={testingHybrid}
+                onClick={handleRunHybridTest}
+              >
+                {testingHybrid ? 'Testing...' : 'Run Hybrid Crypto Test'}
+              </Button>
+
+              {hybridTestResult && (
+                <div
+                  className={`p-3 rounded-lg border text-xs flex items-start space-x-2 ${
+                    hybridTestResult.success
+                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                      : 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+                  }`}
+                >
+                  {hybridTestResult.success ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                  )}
+                  <div className="space-y-0.5">
+                    <span className="font-semibold text-white">
+                      {hybridTestResult.success
+                        ? '✅ AES + RSA Test Passed'
+                        : 'Test Failed'}
+                    </span>
+                    <p className="text-[11px] leading-tight">
+                      {hybridTestResult.success
+                        ? hybridTestResult.details
+                        : hybridTestResult.error}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
           </Card>
         </div>
       </div>

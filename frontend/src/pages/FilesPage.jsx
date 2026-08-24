@@ -292,7 +292,7 @@ export default function FilesPage() {
                       key={file.id}
                       className="hover:bg-slate-900/40 transition-colors group"
                     >
-                      {/* File Name & Content Type */}
+                      {/* File Name & Content Type & Encryption status */}
                       <td className="py-4">
                         <div className="flex items-center space-x-3">
                           <div className="p-2.5 rounded-lg bg-slate-800 text-emerald-400 shrink-0 border border-slate-700/60">
@@ -305,8 +305,17 @@ export default function FilesPage() {
                             >
                               {file.original_filename}
                             </div>
-                            <div className="text-[11px] text-slate-400 mt-0.5 truncate">
-                              {file.content_type || 'application/octet-stream'}
+                            <div className="flex items-center space-x-2 text-[11px] text-slate-400 mt-0.5 truncate">
+                              <span>{file.content_type || 'application/octet-stream'}</span>
+                              {file.is_encrypted ? (
+                                <span className="inline-flex items-center text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded border border-emerald-500/20 font-mono">
+                                  AES-256
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-slate-500 font-mono">
+                                  Legacy
+                                </span>
+                              )}
                             </div>
                           </div>
                         </div>

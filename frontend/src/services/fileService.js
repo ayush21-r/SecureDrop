@@ -1,4 +1,13 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import {
+  fetchPublicKeyFromSupabase,
+  importPublicKeyPEM,
+  generateAESGCMKey,
+  generateRandomIV,
+  encryptFileWithAES,
+  encryptAESKeyWithRSA,
+  bufferToBase64,
+} from './cryptoService';
 
 // 50 MB standard maximum upload limit
 export const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
@@ -39,16 +48,26 @@ export async function fetchReceivers(currentUserId) {
 }
 
 /**
- * Upload a file to the private Supabase Storage bucket and persist metadata in public.files.
- * Handles automatic rollback/cleanup if the database insertion fails.
+ * Upload and send a file using client-side Hybrid Cryptography (AES-256-GCM + RSA-OAEP 2048-bit).
+ *
+ * Flow:
+ * 1. Validate file and recipient identity.
+ * 2. Retrieve recipient's RSA-OAEP public key from Supabase.
+ * 3. Generate a cryptographically random 256-bit AES-GCM key and 12-byte IV.
+ * 4. Encrypt the file using AES-GCM.
+ * 5. Encrypt the AES key using recipient's RSA-OAEP public key.
+ * 6. Upload encrypted ciphertext blob to private Supabase Storage bucket.
+ * 7. Store encryption metadata (encrypted key, IV, algorithms) in public.files.
+ * 8. Automatic rollback/cleanup if database insertion fails.
  *
  * @param {Object} params
  * @param {File} params.file - Browser File object
  * @param {string} params.senderId - Authenticated sender UUID
  * @param {string} params.receiverId - Selected receiver UUID
+ * @param {Function} [params.onProgressStage] - Callback for UI status transitions
  * @returns {Promise<{ success: boolean, data?: Object, error?: string }>}
  */
-export async function uploadAndSendFile({ file, senderId, receiverId }) {
+export async function uploadAndSendFile({ file, senderId, receiverId, onProgressStage }) {
   if (!isSupabaseConfigured) {
     return {
       success: false,
@@ -56,7 +75,7 @@ export async function uploadAndSendFile({ file, senderId, receiverId }) {
     };
   }
 
-  // 1. Validation
+  // 1. Validations
   if (!file) {
     return { success: false, error: 'Please select a file to send.' };
   }
@@ -84,27 +103,65 @@ export async function uploadAndSendFile({ file, senderId, receiverId }) {
     };
   }
 
-  // 2. Generate unique storage path conforming to RLS: <sender_id>/<unique_filename>
-  const sanitizedOriginalName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-  const uniquePrefix = `${Date.now()}_${crypto.randomUUID().substring(0, 8)}`;
-  const uniqueFileName = `${uniquePrefix}_${sanitizedOriginalName}`;
-  const storagePath = `${senderId}/${uniqueFileName}`;
-  const contentType = file.type || 'application/octet-stream';
-
   let storageUploadSuccess = false;
+  let storagePath = '';
 
   try {
-    // 3. Upload file to Supabase Storage bucket
+    // 2. Fetch Recipient's RSA Public Key from Supabase
+    if (onProgressStage) onProgressStage('fetching_key');
+
+    const keyResult = await fetchPublicKeyFromSupabase(receiverId);
+    if (!keyResult.success || !keyResult.data?.public_key) {
+      return {
+        success: false,
+        error:
+          'Recipient has not registered their cryptographic identity (RSA public key). The file cannot be securely encrypted.',
+      };
+    }
+
+    const recipientPublicKey = await importPublicKeyPEM(keyResult.data.public_key);
+
+    // 3. Generate AES-GCM-256 Key and 12-byte IV
+    if (onProgressStage) onProgressStage('encrypting_file');
+
+    const fileBuffer = await file.arrayBuffer();
+    const aesKey = await generateAESGCMKey();
+    const iv = generateRandomIV();
+
+    // 4. Encrypt file with AES-GCM
+    const ciphertextBuffer = await encryptFileWithAES(fileBuffer, aesKey, iv);
+
+    // 5. Encapsulate AES key with recipient's RSA-OAEP Public Key
+    if (onProgressStage) onProgressStage('protecting_key');
+
+    const rawAesKeyBuffer = await window.crypto.subtle.exportKey('raw', aesKey);
+    const encryptedAesKeyBuffer = await encryptAESKeyWithRSA(rawAesKeyBuffer, recipientPublicKey);
+
+    const encryptedKeyBase64 = bufferToBase64(encryptedAesKeyBuffer);
+    const ivBase64 = bufferToBase64(iv);
+
+    // 6. Prepare encrypted Blob for upload
+    const encryptedBlob = new Blob([ciphertextBuffer], { type: 'application/octet-stream' });
+
+    // Generate unique storage path conforming to RLS: <sender_id>/<timestamp>_<uuid>_<filename>.enc
+    const sanitizedOriginalName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const uniquePrefix = `${Date.now()}_${crypto.randomUUID().substring(0, 8)}`;
+    const uniqueFileName = `${uniquePrefix}_${sanitizedOriginalName}.enc`;
+    storagePath = `${senderId}/${uniqueFileName}`;
+
+    // 7. Upload encrypted ciphertext blob to Supabase Storage bucket
+    if (onProgressStage) onProgressStage('uploading_encrypted');
+
     const { data: storageData, error: storageError } = await supabase.storage
       .from(STORAGE_BUCKET_NAME)
-      .upload(storagePath, file, {
-        contentType,
+      .upload(storagePath, encryptedBlob, {
+        contentType: 'application/octet-stream',
         cacheControl: '3600',
         upsert: false,
       });
 
     if (storageError) {
-      console.error('Storage upload error:', storageError.message);
+      console.error('Encrypted storage upload error:', storageError.message);
       return {
         success: false,
         error: `Storage upload failed: ${storageError.message}`,
@@ -113,7 +170,9 @@ export async function uploadAndSendFile({ file, senderId, receiverId }) {
 
     storageUploadSuccess = true;
 
-    // 4. Insert file metadata record into public.files
+    // 8. Insert metadata and encryption records into public.files
+    if (onProgressStage) onProgressStage('saving_metadata');
+
     const { data: fileRecord, error: dbError } = await supabase
       .from('files')
       .insert([
@@ -121,10 +180,15 @@ export async function uploadAndSendFile({ file, senderId, receiverId }) {
           sender_id: senderId,
           receiver_id: receiverId,
           original_filename: file.name,
-          content_type: contentType,
-          file_size: file.size,
+          content_type: file.type || 'application/octet-stream',
+          file_size: file.size, // Original plaintext file size for display
           storage_path: storagePath,
           status: 'available',
+          encrypted_key: encryptedKeyBase64,
+          iv: ivBase64,
+          encryption_algorithm: 'AES-GCM-256',
+          key_encryption_algorithm: 'RSA-OAEP-2048',
+          is_encrypted: true,
         },
       ])
       .select()
@@ -133,7 +197,7 @@ export async function uploadAndSendFile({ file, senderId, receiverId }) {
     if (dbError) {
       console.error('Database metadata insertion error:', dbError.message);
 
-      // 5. Automatic cleanup: delete the uploaded storage object to prevent orphan files
+      // Automatic cleanup: delete the uploaded storage object to prevent orphan files
       try {
         await supabase.storage.from(STORAGE_BUCKET_NAME).remove([storagePath]);
         console.log(`Cleaned up orphaned storage object at ${storagePath}`);
@@ -152,10 +216,10 @@ export async function uploadAndSendFile({ file, senderId, receiverId }) {
       data: fileRecord,
     };
   } catch (err) {
-    console.error('Unexpected error during file send:', err);
+    console.error('Unexpected error during hybrid file send:', err);
 
     // Rollback storage file if error occurred after upload
-    if (storageUploadSuccess) {
+    if (storageUploadSuccess && storagePath) {
       try {
         await supabase.storage.from(STORAGE_BUCKET_NAME).remove([storagePath]);
       } catch (cleanupErr) {
@@ -165,14 +229,14 @@ export async function uploadAndSendFile({ file, senderId, receiverId }) {
 
     return {
       success: false,
-      error: err.message || 'An unexpected error occurred during file upload.',
+      error: err.message || 'An unexpected error occurred during hybrid encryption and upload.',
     };
   }
 }
 
 /**
  * Fetch all files where the current authenticated user is either the receiver or the sender.
- * Uses the get_user_files RPC for full sender/receiver names, with fallback to direct files table query.
+ * Uses the get_user_files RPC for full sender/receiver names and encryption metadata.
  *
  * @param {string} currentUserId - Authenticated user UUID
  * @returns {Promise<{ success: boolean, receivedFiles?: Array, sentFiles?: Array, error?: string }>}
@@ -205,7 +269,10 @@ export async function fetchUserFiles(currentUserId) {
     if (!rpcError && rpcData) {
       allFiles = rpcData;
     } else {
-      console.warn('get_user_files RPC unavailable or returned error, falling back to direct files query:', rpcError?.message);
+      console.warn(
+        'get_user_files RPC unavailable or returned error, falling back to direct files query:',
+        rpcError?.message
+      );
 
       // Fallback: direct query on public.files (protected by files RLS)
       const { data: fallbackData, error: fallbackError } = await supabase

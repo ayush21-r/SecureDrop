@@ -11,6 +11,11 @@ export const RSA_CONFIG = {
   hash: 'SHA-256',
 };
 
+export const AES_CONFIG = {
+  name: 'AES-GCM',
+  length: 256,
+};
+
 // In-flight promise map to avoid race conditions during concurrent component renders
 const activeInitializations = new Map();
 
@@ -223,10 +228,96 @@ export async function registerPublicKeyInSupabase(userId, publicKeyPem) {
   }
 }
 
+// ====================================================================
+// Phase 3.2: AES-GCM Key Generation & Hybrid Encryption Utilities
+// ====================================================================
+
+/**
+ * Generate a cryptographically secure random AES-GCM 256-bit key.
+ * @returns {Promise<CryptoKey>}
+ */
+export async function generateAESGCMKey() {
+  return await window.crypto.subtle.generateKey(
+    AES_CONFIG,
+    true, // extractable to wrap with RSA
+    ['encrypt', 'decrypt']
+  );
+}
+
+/**
+ * Generate a cryptographically secure 96-bit (12-byte) random IV for AES-GCM.
+ * @returns {Uint8Array}
+ */
+export function generateRandomIV() {
+  const iv = new Uint8Array(12);
+  window.crypto.getRandomValues(iv);
+  return iv;
+}
+
+/**
+ * Encrypt binary buffer using AES-GCM 256-bit.
+ * @param {ArrayBuffer} arrayBuffer - Plaintext file data
+ * @param {CryptoKey} aesKey - 256-bit AES-GCM key
+ * @param {Uint8Array} iv - 12-byte initialization vector
+ * @returns {Promise<ArrayBuffer>} Ciphertext with appended 128-bit authentication tag
+ */
+export async function encryptFileWithAES(arrayBuffer, aesKey, iv) {
+  return await window.crypto.subtle.encrypt(
+    {
+      name: 'AES-GCM',
+      iv,
+    },
+    aesKey,
+    arrayBuffer
+  );
+}
+
+/**
+ * Encrypt the raw AES key bytes using the recipient's RSA-OAEP public key.
+ * @param {ArrayBuffer} rawAesKeyBuffer - Raw 32-byte AES key
+ * @param {CryptoKey} recipientPublicKey - Recipient's RSA-OAEP public key
+ * @returns {Promise<ArrayBuffer>} RSA-OAEP encrypted AES key
+ */
+export async function encryptAESKeyWithRSA(rawAesKeyBuffer, recipientPublicKey) {
+  return await window.crypto.subtle.encrypt(
+    {
+      name: 'RSA-OAEP',
+    },
+    recipientPublicKey,
+    rawAesKeyBuffer
+  );
+}
+
+/**
+ * Convert ArrayBuffer or Uint8Array to standard Base64 string.
+ * @param {ArrayBuffer | Uint8Array} buffer
+ * @returns {string}
+ */
+export function bufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+/**
+ * Convert Base64 string to ArrayBuffer.
+ * @param {string} base64
+ * @returns {ArrayBuffer}
+ */
+export function base64ToBuffer(base64) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
 /**
  * Run a native Web Crypto RSA-OAEP encryption and decryption self-test cycle.
- * Encrypts a test payload with the public key and decrypts it with the private key.
- *
  * @param {CryptoKey} publicKey
  * @param {CryptoKey} privateKey
  * @returns {Promise<{ success: boolean, testMessage?: string, decryptedMessage?: string, error?: string }>}
@@ -276,15 +367,81 @@ export async function runRSASelfTest(publicKey, privateKey) {
 }
 
 /**
- * Initialize or restore the authenticated user's persistent RSA Cryptographic Identity.
+ * Run complete AES-256-GCM + RSA-OAEP hybrid encryption self-test.
+ * Verifies full cycle: AES file encryption -> RSA key wrapping -> RSA key unwrapping -> AES file decryption.
  *
- * Lifecycle:
- * 1. Check local IndexedDB for private key.
- * 2. Check Supabase for registered public key.
- * 3. If both exist -> Active identity ready.
- * 4. If neither exists -> Generate RSA-2048 pair, save private key to IndexedDB, register public key in Supabase.
- * 5. If remote public key exists but local private key is missing -> Warn user (do NOT overwrite keys).
- * 6. If local private key exists but remote public key is missing -> Re-register public key.
+ * @returns {Promise<{ success: boolean, details?: string, error?: string }>}
+ */
+export async function runHybridCryptoSelfTest() {
+  try {
+    const samplePlaintext = 'SecureDrop Hybrid Cryptography Self-Test Verification Payload ' + Date.now();
+    const encoder = new TextEncoder();
+    const decoder = new TextDecoder();
+    const plaintextBuffer = encoder.encode(samplePlaintext);
+
+    // 1. Generate RSA key pair
+    const rsaPair = await generateRSAKeyPair();
+
+    // 2. Generate random AES-256 key and IV
+    const aesKey = await generateAESGCMKey();
+    const iv = generateRandomIV();
+
+    // 3. Encrypt payload with AES-GCM
+    const ciphertext = await encryptFileWithAES(plaintextBuffer, aesKey, iv);
+
+    // 4. Export raw AES key bytes
+    const rawAesKey = await window.crypto.subtle.exportKey('raw', aesKey);
+
+    // 5. Encrypt AES key with RSA Public Key
+    const encryptedAesKey = await encryptAESKeyWithRSA(rawAesKey, rsaPair.publicKey);
+
+    // 6. Decrypt AES key with RSA Private Key
+    const decryptedRawAesKey = await window.crypto.subtle.decrypt(
+      { name: 'RSA-OAEP' },
+      rsaPair.privateKey,
+      encryptedAesKey
+    );
+
+    // 7. Import recovered AES key
+    const recoveredAesKey = await window.crypto.subtle.importKey(
+      'raw',
+      decryptedRawAesKey,
+      AES_CONFIG,
+      true,
+      ['decrypt']
+    );
+
+    // 8. Decrypt ciphertext with recovered AES key
+    const decryptedPlaintextBuffer = await window.crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv },
+      recoveredAesKey,
+      ciphertext
+    );
+
+    const recoveredText = decoder.decode(decryptedPlaintextBuffer);
+
+    if (recoveredText === samplePlaintext) {
+      return {
+        success: true,
+        details: 'AES-GCM 256-bit + RSA-OAEP 2048-bit hybrid encryption cycle verified successfully.',
+      };
+    } else {
+      return {
+        success: false,
+        error: 'Recovered plaintext does not match original sample.',
+      };
+    }
+  } catch (err) {
+    console.error('Hybrid Cryptography Self-Test Error:', err);
+    return {
+      success: false,
+      error: err.message || 'Hybrid cryptography self-test failed.',
+    };
+  }
+}
+
+/**
+ * Initialize or restore the authenticated user's persistent RSA Cryptographic Identity.
  *
  * @param {string} userId - Authenticated user UUID
  * @returns {Promise<{
