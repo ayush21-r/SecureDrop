@@ -169,3 +169,142 @@ export async function uploadAndSendFile({ file, senderId, receiverId }) {
     };
   }
 }
+
+/**
+ * Fetch all files where the current authenticated user is either the receiver or the sender.
+ * Uses the get_user_files RPC for full sender/receiver names, with fallback to direct files table query.
+ *
+ * @param {string} currentUserId - Authenticated user UUID
+ * @returns {Promise<{ success: boolean, receivedFiles?: Array, sentFiles?: Array, error?: string }>}
+ */
+export async function fetchUserFiles(currentUserId) {
+  if (!isSupabaseConfigured) {
+    return {
+      success: false,
+      error: 'Supabase credentials are not configured.',
+      receivedFiles: [],
+      sentFiles: [],
+    };
+  }
+
+  if (!currentUserId) {
+    return {
+      success: false,
+      error: 'User not authenticated.',
+      receivedFiles: [],
+      sentFiles: [],
+    };
+  }
+
+  try {
+    // 1. Attempt to call secure RPC
+    const { data: rpcData, error: rpcError } = await supabase.rpc('get_user_files');
+
+    let allFiles = [];
+
+    if (!rpcError && rpcData) {
+      allFiles = rpcData;
+    } else {
+      console.warn('get_user_files RPC unavailable or returned error, falling back to direct files query:', rpcError?.message);
+
+      // Fallback: direct query on public.files (protected by files RLS)
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('files')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (fallbackError) {
+        return {
+          success: false,
+          error: fallbackError.message,
+          receivedFiles: [],
+          sentFiles: [],
+        };
+      }
+
+      allFiles = fallbackData || [];
+    }
+
+    const receivedFiles = allFiles.filter((f) => f.receiver_id === currentUserId);
+    const sentFiles = allFiles.filter((f) => f.sender_id === currentUserId);
+
+    return {
+      success: true,
+      receivedFiles,
+      sentFiles,
+    };
+  } catch (err) {
+    console.error('Error fetching user files:', err);
+    return {
+      success: false,
+      error: err.message || 'Failed to load files.',
+      receivedFiles: [],
+      sentFiles: [],
+    };
+  }
+}
+
+/**
+ * Download a private file from the secure-files Supabase Storage bucket.
+ * Triggers a browser file download using the file's original_filename.
+ *
+ * @param {Object} params
+ * @param {string} params.storagePath - Path inside secure-files bucket
+ * @param {string} params.originalFilename - Clean original filename to save as
+ * @param {string} params.status - File status (e.g. 'available', 'deleted')
+ * @returns {Promise<{ success: boolean, error?: string }>}
+ */
+export async function downloadFile({ storagePath, originalFilename, status }) {
+  if (!isSupabaseConfigured) {
+    return { success: false, error: 'Supabase credentials are not configured.' };
+  }
+
+  if (status === 'deleted') {
+    return { success: false, error: 'File is no longer available.' };
+  }
+
+  if (!storagePath) {
+    return { success: false, error: 'Invalid file storage path.' };
+  }
+
+  try {
+    // 1. Download file blob from private bucket
+    const { data: blob, error: downloadError } = await supabase.storage
+      .from(STORAGE_BUCKET_NAME)
+      .download(storagePath);
+
+    if (downloadError) {
+      console.error('Storage download error:', downloadError.message);
+      return {
+        success: false,
+        error: `Download failed: ${downloadError.message || 'Access denied or file not found.'}`,
+      };
+    }
+
+    if (!blob) {
+      return { success: false, error: 'Empty file payload received from storage.' };
+    }
+
+    // 2. Trigger browser download using original filename
+    const objectUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = originalFilename || 'downloaded_file';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    // 3. Clean up object URL
+    setTimeout(() => {
+      window.URL.revokeObjectURL(objectUrl);
+    }, 100);
+
+    return { success: true };
+  } catch (err) {
+    console.error('Unexpected download error:', err);
+    return {
+      success: false,
+      error: err.message || 'Failed to download file.',
+    };
+  }
+}

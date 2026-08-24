@@ -1,15 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   FileText,
   Download,
-  ShieldCheck,
   Search,
-  Filter,
   CheckCircle2,
-  Lock,
+  AlertCircle,
   Inbox,
+  Send,
+  Loader2,
+  RefreshCw,
+  X,
+  FileDown,
+  User,
   Clock,
-  Eye,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import Card from '../components/Card';
@@ -17,194 +20,402 @@ import Button from '../components/Button';
 import Input from '../components/Input';
 import StatusBadge from '../components/StatusBadge';
 import EmptyState from '../components/EmptyState';
+import { useAuth } from '../context/AuthContext';
+import { fetchUserFiles, downloadFile } from '../services/fileService';
 
 export default function FilesPage() {
-  const [activeTab, setActiveTab] = useState('received'); // 'received' | 'sent' | 'empty_demo'
+  const { user } = useAuth();
+
+  const [activeTab, setActiveTab] = useState('received'); // 'received' | 'sent'
   const [searchQuery, setSearchQuery] = useState('');
+  const [receivedFiles, setReceivedFiles] = useState([]);
+  const [sentFiles, setSentFiles] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(null);
 
-  const receivedFiles = [
-    {
-      id: 'rf-1',
-      name: 'financial_audit_q3.pdf',
-      size: '2.4 MB',
-      sender: 'alice@securedrop.io',
-      receivedAt: 'Today at 2:45 PM',
-      encryption: 'AES-256-GCM',
-      status: 'verified',
-      sha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-    },
-    {
-      id: 'rf-2',
-      name: 'production_database_schema.sql',
-      size: '1.1 MB',
-      sender: 'dave@securedrop.io',
-      receivedAt: 'Yesterday at 5:12 PM',
-      encryption: 'AES-256-GCM',
-      status: 'encrypted',
-      sha256: 'ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb',
-    },
-    {
-      id: 'rf-3',
-      name: 'confidential_contract_v2.docx',
-      size: '3.8 MB',
-      sender: 'legal@securedrop.io',
-      receivedAt: 'Aug 20, 2026',
-      encryption: 'AES-256-GCM',
-      status: 'verified',
-      sha256: '4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a',
-    },
-  ];
+  const [downloadingId, setDownloadingId] = useState(null);
+  const [downloadError, setDownloadError] = useState(null);
+  const [downloadSuccess, setDownloadSuccess] = useState(null);
 
-  const filteredFiles = receivedFiles.filter(
-    (f) =>
-      f.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      f.sender.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const loadFiles = async () => {
+    if (!user) return;
+    setLoading(true);
+    setFetchError(null);
+
+    const result = await fetchUserFiles(user.id);
+    setLoading(false);
+
+    if (result.success) {
+      setReceivedFiles(result.receivedFiles || []);
+      setSentFiles(result.sentFiles || []);
+    } else {
+      setFetchError(result.error);
+    }
+  };
+
+  useEffect(() => {
+    loadFiles();
+  }, [user]);
+
+  const handleDownload = async (file) => {
+    if (downloadingId) return; // Prevent simultaneous downloads
+
+    setDownloadError(null);
+    setDownloadSuccess(null);
+
+    if (file.status === 'deleted') {
+      setDownloadError(`Cannot download "${file.original_filename}": File is marked as deleted.`);
+      return;
+    }
+
+    setDownloadingId(file.id);
+
+    const result = await downloadFile({
+      storagePath: file.storage_path,
+      originalFilename: file.original_filename,
+      status: file.status,
+    });
+
+    setDownloadingId(null);
+
+    if (result.success) {
+      setDownloadSuccess(`Downloaded "${file.original_filename}" successfully.`);
+      setTimeout(() => setDownloadSuccess(null), 5000);
+    } else {
+      setDownloadError(result.error);
+    }
+  };
+
+  const formatFileSize = (bytes) => {
+    if (!bytes && bytes !== 0) return '0 B';
+    const mb = bytes / (1024 * 1024);
+    if (mb >= 1) return `${mb.toFixed(2)} MB`;
+    const kb = bytes / 1024;
+    if (kb >= 1) return `${kb.toFixed(2)} KB`;
+    return `${bytes} B`;
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    try {
+      return new Date(dateString).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch {
+      return dateString;
+    }
+  };
+
+  // Search filtering
+  const currentList = activeTab === 'received' ? receivedFiles : sentFiles;
+  const filteredFiles = currentList.filter((f) => {
+    const q = searchQuery.toLowerCase();
+    const filenameMatch = (f.original_filename || '').toLowerCase().includes(q);
+    const peerNameMatch = (
+      activeTab === 'received'
+        ? f.sender_name || f.sender_email || ''
+        : f.receiver_name || f.receiver_email || ''
+    )
+      .toLowerCase()
+      .includes(q);
+    return filenameMatch || peerNameMatch;
+  });
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <PageHeader
-        title="Encrypted Files Vault"
-        description="View and decrypt files received from your peers or inspect transmitted payloads."
+        title="My Files"
+        description="Securely access and download files sent to you or inspect your outgoing transfers."
+        badge={<StatusBadge status="active" label="Phase 2.3 — Receive & Download" />}
+        action={
+          <button
+            type="button"
+            onClick={loadFiles}
+            disabled={loading}
+            className="inline-flex items-center space-x-1.5 px-3 py-2 rounded-lg bg-slate-900 hover:bg-slate-850 border border-slate-800 text-xs font-medium text-slate-300 hover:text-white transition-colors disabled:opacity-50"
+            title="Refresh files vault"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <span>Refresh Vault</span>
+          </button>
+        }
       />
 
-      {/* Tabs & Controls */}
+      {/* Download Success Alert */}
+      {downloadSuccess && (
+        <div className="mb-6 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-300 flex items-center justify-between shadow-md">
+          <div className="flex items-center space-x-2.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>{downloadSuccess}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setDownloadSuccess(null)}
+            className="text-emerald-400 hover:text-emerald-200"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Download Error Alert */}
+      {downloadError && (
+        <div className="mb-6 p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 flex items-center justify-between shadow-md">
+          <div className="flex items-center space-x-2.5">
+            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+            <span>{downloadError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setDownloadError(null)}
+            className="text-rose-400 hover:text-rose-200"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Fetch Error Banner */}
+      {fetchError && (
+        <div className="mb-6 p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 flex items-center justify-between shadow-md">
+          <div className="flex items-center space-x-2.5">
+            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+            <span>Failed to load files: {fetchError}</span>
+          </div>
+          <Button variant="outline" size="sm" onClick={loadFiles}>
+            Retry
+          </Button>
+        </div>
+      )}
+
+      {/* Tabs & Search Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         {/* Tab Buttons */}
         <div className="inline-flex p-1 rounded-lg bg-slate-900 border border-slate-800">
           <button
             type="button"
-            onClick={() => setActiveTab('received')}
-            className={`px-4 py-1.5 rounded-md text-xs font-medium transition-colors ${
+            onClick={() => {
+              setActiveTab('received');
+              setSearchQuery('');
+            }}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-md text-xs font-medium transition-colors cursor-pointer ${
               activeTab === 'received'
                 ? 'bg-slate-800 text-white shadow-sm'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            Received Files ({receivedFiles.length})
+            <FileDown className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Received Files</span>
+            <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-slate-950 font-mono text-slate-300">
+              {receivedFiles.length}
+            </span>
           </button>
+
           <button
             type="button"
-            onClick={() => setActiveTab('sent')}
-            className={`px-4 py-1.5 rounded-md text-xs font-medium transition-colors ${
+            onClick={() => {
+              setActiveTab('sent');
+              setSearchQuery('');
+            }}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-md text-xs font-medium transition-colors cursor-pointer ${
               activeTab === 'sent'
                 ? 'bg-slate-800 text-white shadow-sm'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            Sent Transfers
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('empty_demo')}
-            className={`px-4 py-1.5 rounded-md text-xs font-medium transition-colors ${
-              activeTab === 'empty_demo'
-                ? 'bg-slate-800 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            Empty State Demo
+            <Send className="w-3.5 h-3.5 text-purple-400" />
+            <span>Sent Files</span>
+            <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-slate-950 font-mono text-slate-300">
+              {sentFiles.length}
+            </span>
           </button>
         </div>
 
-        {/* Search */}
-        {activeTab === 'received' && (
-          <div className="w-full sm:w-72">
-            <Input
-              placeholder="Search by file or sender..."
-              icon={Search}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-        )}
+        {/* Search Bar */}
+        <div className="w-full sm:w-80">
+          <Input
+            placeholder={
+              activeTab === 'received'
+                ? 'Search by filename or sender...'
+                : 'Search by filename or recipient...'
+            }
+            icon={Search}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
       </div>
 
-      {/* Main Content Area */}
-      {activeTab === 'received' && (
-        <Card>
-          {filteredFiles.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs sm:text-sm">
-                <thead>
-                  <tr className="text-slate-400 border-b border-slate-800">
-                    <th className="pb-3 font-medium">File Name</th>
-                    <th className="pb-3 font-medium">Size</th>
-                    <th className="pb-3 font-medium">Sender</th>
-                    <th className="pb-3 font-medium">Received At</th>
-                    <th className="pb-3 font-medium">Status</th>
-                    <th className="pb-3 font-medium text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/60">
-                  {filteredFiles.map((file) => (
-                    <tr key={file.id} className="hover:bg-slate-900/40 transition-colors">
+      {/* Main Files Table Card */}
+      <Card>
+        {loading ? (
+          <div className="py-16 text-center text-xs text-slate-400 flex flex-col items-center justify-center space-y-3">
+            <Loader2 className="w-6 h-6 animate-spin text-emerald-400" />
+            <span>Loading files from secure vault...</span>
+          </div>
+        ) : filteredFiles.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs sm:text-sm">
+              <thead>
+                <tr className="text-slate-400 border-b border-slate-800">
+                  <th className="pb-3 font-medium">File Name</th>
+                  <th className="pb-3 font-medium">
+                    {activeTab === 'received' ? 'Sender' : 'Recipient'}
+                  </th>
+                  <th className="pb-3 font-medium">Size</th>
+                  <th className="pb-3 font-medium">Date</th>
+                  <th className="pb-3 font-medium">Status</th>
+                  <th className="pb-3 font-medium text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60">
+                {filteredFiles.map((file) => {
+                  const isDownloading = downloadingId === file.id;
+                  const isDeleted = file.status === 'deleted';
+
+                  const peerName =
+                    activeTab === 'received'
+                      ? file.sender_name || 'Registered Sender'
+                      : file.receiver_name || 'Registered Recipient';
+
+                  const peerEmail =
+                    activeTab === 'received'
+                      ? file.sender_email || ''
+                      : file.receiver_email || '';
+
+                  return (
+                    <tr
+                      key={file.id}
+                      className="hover:bg-slate-900/40 transition-colors group"
+                    >
+                      {/* File Name & Content Type */}
                       <td className="py-4">
                         <div className="flex items-center space-x-3">
-                          <div className="p-2 rounded-lg bg-slate-800 text-emerald-400 shrink-0">
+                          <div className="p-2.5 rounded-lg bg-slate-800 text-emerald-400 shrink-0 border border-slate-700/60">
                             <FileText className="w-4 h-4" />
                           </div>
-                          <div>
-                            <div className="font-mono font-medium text-white truncate max-w-[180px] sm:max-w-xs">
-                              {file.name}
+                          <div className="truncate max-w-[180px] sm:max-w-xs">
+                            <div
+                              className="font-mono font-medium text-white truncate"
+                              title={file.original_filename}
+                            >
+                              {file.original_filename}
                             </div>
-                            <div className="text-[11px] text-slate-400 font-mono mt-0.5 truncate max-w-[180px] sm:max-w-xs" title={file.sha256}>
-                              SHA256: {file.sha256.substring(0, 16)}...
+                            <div className="text-[11px] text-slate-400 mt-0.5 truncate">
+                              {file.content_type || 'application/octet-stream'}
                             </div>
                           </div>
                         </div>
                       </td>
-                      <td className="py-4 text-slate-300 font-mono">{file.size}</td>
-                      <td className="py-4 text-slate-300">{file.sender}</td>
-                      <td className="py-4 text-slate-400">{file.receivedAt}</td>
+
+                      {/* Peer (Sender or Receiver) */}
                       <td className="py-4">
-                        <StatusBadge status={file.status} />
+                        <div className="text-slate-200 font-medium">
+                          {peerName}
+                        </div>
+                        {peerEmail && (
+                          <div className="text-[11px] text-slate-400 truncate max-w-[160px]">
+                            {peerEmail}
+                          </div>
+                        )}
                       </td>
+
+                      {/* File Size */}
+                      <td className="py-4 text-slate-300 font-mono">
+                        {formatFileSize(file.file_size)}
+                      </td>
+
+                      {/* Date */}
+                      <td className="py-4 text-slate-400 text-xs">
+                        {formatDate(file.created_at)}
+                      </td>
+
+                      {/* Status Badge */}
+                      <td className="py-4">
+                        <StatusBadge
+                          status={
+                            file.status === 'available'
+                              ? 'ready'
+                              : file.status === 'deleted'
+                              ? 'error'
+                              : 'pending'
+                          }
+                          label={
+                            file.status === 'available'
+                              ? 'Available'
+                              : file.status === 'deleted'
+                              ? 'Deleted'
+                              : file.status || 'Pending'
+                          }
+                        />
+                      </td>
+
+                      {/* Download Action */}
                       <td className="py-4 text-right">
                         <Button
-                          variant="secondary"
+                          variant={activeTab === 'received' ? 'primary' : 'secondary'}
                           size="sm"
-                          icon={Download}
-                          onClick={() => alert("Decryption will be connected in Phase 4.")}
+                          icon={isDownloading ? Loader2 : Download}
+                          loading={isDownloading}
+                          disabled={isDownloading || isDeleted}
+                          onClick={() => handleDownload(file)}
+                          title={
+                            isDeleted
+                              ? 'File is no longer available.'
+                              : `Download ${file.original_filename}`
+                          }
                         >
-                          Decrypt & Download
+                          {isDownloading
+                            ? 'Downloading...'
+                            : isDeleted
+                            ? 'Unavailable'
+                            : 'Download'}
                         </Button>
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <EmptyState
-              title="No matching files found"
-              description="Try adjusting your search query or clear the filter."
-              actionLabel="Clear Search"
-              onAction={() => setSearchQuery('')}
-            />
-          )}
-        </Card>
-      )}
-
-      {activeTab === 'sent' && (
-        <Card>
-          <div className="p-4 text-center text-slate-400 text-sm">
-            Sent files log will list outgoing encrypted packages in Phase 3 & 4.
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        </Card>
-      )}
-
-      {activeTab === 'empty_demo' && (
-        <Card>
+        ) : (
           <EmptyState
-            icon={Inbox}
-            title="No secure files yet"
-            description="Files you receive will appear here. When another user sends you an encrypted file, it will be listed in this vault."
-            actionLabel="Send a File"
-            onAction={() => window.location.href = '/send'}
+            icon={activeTab === 'received' ? Inbox : Send}
+            title={
+              searchQuery
+                ? 'No matching files found'
+                : activeTab === 'received'
+                ? 'No received files yet'
+                : 'No sent files yet'
+            }
+            description={
+              searchQuery
+                ? 'Try adjusting your search query or clear the filter.'
+                : activeTab === 'received'
+                ? 'Files sent to you by other registered users will appear here for secure download.'
+                : 'You have not sent any files yet. Use the Send File page to transfer files to other users.'
+            }
+            actionLabel={
+              searchQuery
+                ? 'Clear Search'
+                : activeTab === 'received'
+                ? null
+                : 'Send a File'
+            }
+            onAction={
+              searchQuery
+                ? () => setSearchQuery('')
+                : activeTab === 'received'
+                ? null
+                : () => (window.location.href = '/send')
+            }
           />
-        </Card>
-      )}
+        )}
+      </Card>
     </div>
   );
 }

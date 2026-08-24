@@ -69,6 +69,14 @@ export default function App() {
                 }
               />
               <Route
+                path="/my-files"
+                element={
+                  <ProtectedRoute>
+                    <FilesPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
                 path="/profile"
                 element={
                   <ProtectedRoute>
