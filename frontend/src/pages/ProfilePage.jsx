@@ -15,15 +15,26 @@ import {
   CheckCircle2,
   Play,
   RefreshCw,
+  Lock,
+  CloudUpload,
+  DownloadCloud,
+  Eye,
+  EyeOff,
+  ShieldCheck,
+  Key,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import Card from '../components/Card';
 import Button from '../components/Button';
+import Input from '../components/Input';
 import StatusBadge from '../components/StatusBadge';
 import { useAuth } from '../context/AuthContext';
 import {
   initializeCryptoIdentity,
   runRSASelfTest,
+  createEncryptedKeyBackup,
+  fetchKeyBackupMetadata,
+  restorePrivateKeyFromBackup,
 } from '../services/cryptoService';
 
 export default function ProfilePage() {
@@ -44,6 +55,28 @@ export default function ProfilePage() {
   const [testingCrypto, setTestingCrypto] = useState(false);
   const [testResult, setTestResult] = useState(null);
 
+  // Backup & Recovery state
+  const [backupMeta, setBackupMeta] = useState({
+    loading: true,
+    hasBackup: false,
+    data: null,
+  });
+
+  const [showBackupModal, setShowBackupModal] = useState(false);
+  const [backupPassphrase, setBackupPassphrase] = useState('');
+  const [backupConfirmPassphrase, setBackupConfirmPassphrase] = useState('');
+  const [showBackupPass, setShowBackupPass] = useState(false);
+  const [backingUp, setBackingUp] = useState(false);
+  const [backupError, setBackupError] = useState(null);
+  const [backupSuccess, setBackupSuccess] = useState(null);
+
+  // Restore state (for new devices)
+  const [restorePassphrase, setRestorePassphrase] = useState('');
+  const [showRestorePass, setShowRestorePass] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const [restoreError, setRestoreError] = useState(null);
+  const [restoreSuccess, setRestoreSuccess] = useState(null);
+
   const loadIdentity = async () => {
     if (!user) return;
     setCryptoState((prev) => ({ ...prev, loading: true, error: null }));
@@ -57,6 +90,20 @@ export default function ProfilePage() {
       publicKey: result.publicKey || null,
       privateKey: result.privateKey || null,
       error: result.error || null,
+    });
+
+    // Check backup metadata
+    loadBackupStatus();
+  };
+
+  const loadBackupStatus = async () => {
+    if (!user) return;
+    setBackupMeta((prev) => ({ ...prev, loading: true }));
+    const result = await fetchKeyBackupMetadata(user.id);
+    setBackupMeta({
+      loading: false,
+      hasBackup: result.hasBackup,
+      data: result.data || null,
     });
   };
 
@@ -89,6 +136,66 @@ export default function ProfilePage() {
     setTestResult(result);
   };
 
+  const handleCreateBackup = async (e) => {
+    e.preventDefault();
+    setBackupError(null);
+    setBackupSuccess(null);
+
+    if (!backupPassphrase || backupPassphrase.length < 8) {
+      setBackupError('Recovery passphrase must be at least 8 characters long.');
+      return;
+    }
+
+    if (backupPassphrase !== backupConfirmPassphrase) {
+      setBackupError('Passphrases do not match.');
+      return;
+    }
+
+    if (!cryptoState.privateKey) {
+      setBackupError('Local private key is not accessible.');
+      return;
+    }
+
+    setBackingUp(true);
+    const result = await createEncryptedKeyBackup(user.id, cryptoState.privateKey, backupPassphrase);
+    setBackingUp(false);
+
+    if (result.success) {
+      setBackupSuccess('Encrypted private key backup created successfully! You can now restore on other devices.');
+      setBackupPassphrase('');
+      setBackupConfirmPassphrase('');
+      setShowBackupModal(false);
+      loadBackupStatus();
+      setTimeout(() => setBackupSuccess(null), 7000);
+    } else {
+      setBackupError(result.error || 'Failed to create encrypted backup.');
+    }
+  };
+
+  const handleRestoreKey = async (e) => {
+    e.preventDefault();
+    setRestoreError(null);
+    setRestoreSuccess(null);
+
+    if (!restorePassphrase) {
+      setRestoreError('Please enter your recovery passphrase.');
+      return;
+    }
+
+    setRestoring(true);
+    const result = await restorePrivateKeyFromBackup(user.id, restorePassphrase);
+    setRestoring(false);
+
+    if (result.success) {
+      setRestoreSuccess('Private key successfully verified and restored to this device!');
+      setRestorePassphrase('');
+      // Reload cryptographic identity
+      await loadIdentity();
+    } else {
+      setRestoreError(result.error);
+    }
+  };
+
   const handleLogout = async () => {
     await signOut();
     navigate('/login');
@@ -113,7 +220,7 @@ export default function ProfilePage() {
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <PageHeader
         title="Account & Cryptographic Identity"
-        description="Manage your persistent RSA cryptographic identity, credentials, and local vault security."
+        description="Manage your persistent RSA cryptographic identity, multi-device key backup, and local vault security."
         badge={<StatusBadge status="active" label="Supabase Auth Active" />}
         action={
           <Button variant="danger" size="sm" icon={LogOut} onClick={handleLogout}>
@@ -170,6 +277,84 @@ export default function ProfilePage() {
           </div>
         </Card>
 
+        {/* Multi-Device Recovery / Missing Key Alert */}
+        {cryptoState.status === 'private_key_missing' && (
+          <Card
+            title="Private Key Recovery (New Device)"
+            subtitle="Restore your RSA identity from an encrypted cloud backup"
+          >
+            <div className="space-y-4">
+              <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300 flex items-start space-x-3">
+                <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <span className="font-semibold text-amber-200">
+                    Private Key Missing on This Device:
+                  </span>
+                  <p className="text-[11px] text-amber-300 leading-relaxed">
+                    Your public key is registered in Supabase, but your private key is isolated on your other device's IndexedDB. To decrypt files here, restore your key using your recovery passphrase.
+                  </p>
+                </div>
+              </div>
+
+              {backupMeta.hasBackup ? (
+                <form onSubmit={handleRestoreKey} className="space-y-4 pt-2">
+                  <Input
+                    label="Recovery Passphrase"
+                    name="restorePassphrase"
+                    type={showRestorePass ? 'text' : 'password'}
+                    placeholder="Enter the passphrase you used during backup"
+                    required
+                    icon={Key}
+                    value={restorePassphrase}
+                    onChange={(e) => {
+                      setRestorePassphrase(e.target.value);
+                      if (restoreError) setRestoreError(null);
+                    }}
+                    error={restoreError}
+                    endAdornment={
+                      <button
+                        type="button"
+                        onClick={() => setShowRestorePass(!showRestorePass)}
+                        className="text-slate-400 hover:text-slate-200 p-1"
+                        aria-label={showRestorePass ? 'Hide passphrase' : 'Show passphrase'}
+                      >
+                        {showRestorePass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    }
+                  />
+
+                  {restoreSuccess && (
+                    <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-300 flex items-center space-x-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span>{restoreSuccess}</span>
+                    </div>
+                  )}
+
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    icon={DownloadCloud}
+                    loading={restoring}
+                    disabled={restoring}
+                  >
+                    {restoring ? 'Decrypting & Verifying Key...' : 'Restore Private Key'}
+                  </Button>
+                </form>
+              ) : (
+                <div className="p-4 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-300 space-y-2">
+                  <div className="font-semibold text-white flex items-center space-x-2">
+                    <Lock className="w-4 h-4 text-emerald-400" />
+                    <span>No Cloud Backup Found</span>
+                  </div>
+                  <p className="text-slate-400 leading-relaxed">
+                    You have not yet created an encrypted key backup for this account. To use this device, please log in on your original device (where your private key is active) and create a backup under <strong>Account & Cryptographic Identity</strong>.
+                  </p>
+                </div>
+              )}
+            </div>
+          </Card>
+        )}
+
         {/* Cryptographic Identity Card */}
         <Card
           title="Cryptographic Identity"
@@ -189,22 +374,14 @@ export default function ProfilePage() {
             )
           }
         >
-          {/* Missing Private Key Alert */}
-          {cryptoState.status === 'private_key_missing' && (
-            <div className="mb-4 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300 flex items-start space-x-3">
-              <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-              <div className="space-y-1">
-                <span className="font-semibold text-amber-200">
-                  Private Key Not Found on This Browser:
-                </span>
-                <p className="text-[11px] text-amber-300 leading-relaxed">
-                  Your public key is registered in Supabase, but your private key is not in this device's IndexedDB. Generating a new key is disabled to prevent previous files from becoming undecryptable.
-                </p>
-              </div>
+          {/* Success / Error Alerts */}
+          {backupSuccess && (
+            <div className="mb-4 p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-300 flex items-center space-x-2.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>{backupSuccess}</span>
             </div>
           )}
 
-          {/* Cryptography Initialization Error Alert */}
           {cryptoState.error && cryptoState.status !== 'private_key_missing' && (
             <div className="mb-4 p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 flex items-center justify-between">
               <span>{cryptoState.error}</span>
@@ -214,7 +391,7 @@ export default function ProfilePage() {
             </div>
           )}
 
-          <div className="space-y-4">
+          <div className="space-y-6">
             {/* Key Properties Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-mono">
               <div className="p-3.5 rounded-lg bg-slate-900 border border-slate-800">
@@ -235,6 +412,116 @@ export default function ProfilePage() {
                 </div>
               </div>
             </div>
+
+            {/* Zero-Knowledge Encrypted Key Backup Section */}
+            {cryptoState.status === 'active' && (
+              <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-xs font-semibold text-white">
+                        Multi-Device Encrypted Key Backup
+                      </span>
+                      {backupMeta.hasBackup ? (
+                        <span className="inline-flex items-center space-x-1 text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-mono">
+                          <ShieldCheck className="w-3 h-3" />
+                          <span>Backup Available</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center space-x-1 text-[10px] text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 font-mono">
+                          <span>Not Backed Up</span>
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      Encrypts your RSA private key client-side with PBKDF2 (250,000 rounds) + AES-GCM-256 for secure recovery across devices.
+                    </p>
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    icon={CloudUpload}
+                    onClick={() => setShowBackupModal(!showBackupModal)}
+                  >
+                    {backupMeta.hasBackup ? 'Update Key Backup' : 'Create Key Backup'}
+                  </Button>
+                </div>
+
+                {/* Backup Input Modal / Drawer */}
+                {showBackupModal && (
+                  <form
+                    onSubmit={handleCreateBackup}
+                    className="p-4 rounded-lg bg-slate-950 border border-slate-800 space-y-3 pt-3 mt-2"
+                  >
+                    <div className="text-xs font-semibold text-slate-200">
+                      Set Recovery Passphrase
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      Choose a strong passphrase. If forgotten, your encrypted private key backup cannot be recovered.
+                    </p>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <Input
+                        label="Passphrase (min 8 characters)"
+                        name="backupPassphrase"
+                        type={showBackupPass ? 'text' : 'password'}
+                        placeholder="••••••••••••"
+                        required
+                        icon={Lock}
+                        value={backupPassphrase}
+                        onChange={(e) => setBackupPassphrase(e.target.value)}
+                      />
+
+                      <Input
+                        label="Confirm Passphrase"
+                        name="backupConfirmPassphrase"
+                        type={showBackupPass ? 'text' : 'password'}
+                        placeholder="••••••••••••"
+                        required
+                        icon={Lock}
+                        value={backupConfirmPassphrase}
+                        onChange={(e) => setBackupConfirmPassphrase(e.target.value)}
+                        endAdornment={
+                          <button
+                            type="button"
+                            onClick={() => setShowBackupPass(!showBackupPass)}
+                            className="text-slate-400 hover:text-slate-200 p-1"
+                            aria-label={showBackupPass ? 'Hide passphrase' : 'Show passphrase'}
+                          >
+                            {showBackupPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          </button>
+                        }
+                      />
+                    </div>
+
+                    {backupError && (
+                      <p className="text-xs text-rose-400">{backupError}</p>
+                    )}
+
+                    <div className="flex items-center space-x-2 pt-2">
+                      <Button
+                        type="submit"
+                        size="sm"
+                        icon={CloudUpload}
+                        loading={backingUp}
+                        disabled={backingUp}
+                      >
+                        {backingUp ? 'Encrypting & Uploading...' : 'Save Encrypted Backup'}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setShowBackupModal(false)}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            )}
 
             {/* Public Key Display */}
             <div>
@@ -337,13 +624,13 @@ export default function ProfilePage() {
               <div>
                 <div className="font-medium text-white">Local IndexedDB Key Isolation</div>
                 <div className="text-slate-400 text-[11px] mt-0.5">
-                  Private keys are isolated in browser IndexedDB and never transmitted over the network.
+                  Private keys are isolated in browser IndexedDB and never transmitted over the network in plaintext.
                 </div>
               </div>
               <StatusBadge status="ready" label="Enforced" />
             </div>
 
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <div>
                 <div className="font-medium text-white">Public Key Registration</div>
                 <div className="text-slate-400 text-[11px] mt-0.5">
@@ -351,6 +638,19 @@ export default function ProfilePage() {
                 </div>
               </div>
               <StatusBadge status="ready" label="Synced" />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-medium text-white">Zero-Knowledge Cloud Backup</div>
+                <div className="text-slate-400 text-[11px] mt-0.5">
+                  Backups are wrapped in PBKDF2 (250,000 rounds) + AES-GCM-256 before storage.
+                </div>
+              </div>
+              <StatusBadge
+                status={backupMeta.hasBackup ? 'ready' : 'pending'}
+                label={backupMeta.hasBackup ? 'Available' : 'Pending'}
+              />
             </div>
           </div>
         </Card>

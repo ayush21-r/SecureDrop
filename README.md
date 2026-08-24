@@ -235,6 +235,7 @@ SecureDrop/
     │   ├── get_receivers.sql           # Secure recipient directory RPC
     │   ├── get_user_files.sql          # Authenticated file query RPC
     │   ├── phase_3_2_encryption.sql    # Encryption columns migration for public.files
+    │   ├── user_key_backups.sql        # Table & RLS policies for encrypted private-key recovery
     │   └── user_public_keys.sql        # Table & RLS policies for RSA public keys
     ├── requirements.txt                # Backend Python dependencies
     ├── .env.example                    # Template for backend environment variables
@@ -313,9 +314,10 @@ uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 Execute the SQL scripts located in `backend/sql/` inside your **Supabase SQL Editor** in the following order:
 
 1. **[user_public_keys.sql](backend/sql/user_public_keys.sql)**: Creates the table for RSA-OAEP public keys with RLS policies allowing authenticated users to register their public key and view others' public keys.
-2. **[phase_3_2_encryption.sql](backend/sql/phase_3_2_encryption.sql)**: Adds `encrypted_key`, `iv`, `encryption_algorithm`, and `is_encrypted` columns to `public.files`.
-3. **[get_receivers.sql](backend/sql/get_receivers.sql)**: Creates the `get_receivers()` RPC function for secure recipient selection.
-4. **[get_user_files.sql](backend/sql/get_user_files.sql)**: Creates the `get_user_files()` RPC function to fetch a user's sent and received files with sender/receiver profile details.
+2. **[user_key_backups.sql](backend/sql/user_key_backups.sql)**: Creates the table for zero-knowledge encrypted RSA private key backups with strict owner-only RLS policies.
+3. **[phase_3_2_encryption.sql](backend/sql/phase_3_2_encryption.sql)**: Adds `encrypted_key`, `iv`, `encryption_algorithm`, and `is_encrypted` columns to `public.files`.
+4. **[get_receivers.sql](backend/sql/get_receivers.sql)**: Creates the `get_receivers()` RPC function for secure recipient selection.
+5. **[get_user_files.sql](backend/sql/get_user_files.sql)**: Creates the `get_user_files()` RPC function to fetch a user's sent and received files with sender/receiver profile details.
 
 ---
 

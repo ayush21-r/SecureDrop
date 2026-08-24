@@ -170,9 +170,19 @@ export default function FilesPage() {
       {downloadError && (
         <div className="mb-6 p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 flex items-start space-x-3 shadow-md">
           <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
-          <div className="flex-1 space-y-0.5">
+          <div className="flex-1 space-y-1">
             <span className="font-semibold text-rose-200">Decryption Failed: </span>
-            <p className="text-rose-300 leading-relaxed">{downloadError}</p>
+            <p className="text-rose-300 leading-relaxed">
+              {downloadError}
+              {downloadError.includes('private key could not be found') && (
+                <a
+                  href="/profile"
+                  className="block mt-1.5 font-semibold text-emerald-400 hover:text-emerald-300 underline"
+                >
+                  Go to Profile to restore your private key from encrypted backup &rarr;
+                </a>
+              )}
+            </p>
           </div>
           <button
             type="button"
