@@ -20,8 +20,8 @@ export async function fetchReceivers(currentUserId) {
   try {
     let query = supabase
       .from('profiles')
-      .select('id, full_name, email, updated_at')
-      .order('full_name', { ascending: true });
+      .select('id, name, email, updated_at')
+      .order('name', { ascending: true });
 
     if (currentUserId) {
       query = query.neq('id', currentUserId);

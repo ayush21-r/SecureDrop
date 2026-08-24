@@ -119,7 +119,7 @@ export default function SendFilePage() {
         fileRecord: result.data,
         originalFilename: selectedFile.name,
         fileSize: selectedFile.size,
-        recipientName: recipientProfile?.full_name || 'Recipient',
+        recipientName: recipientProfile?.name || recipientProfile?.full_name || 'Recipient',
         recipientEmail: recipientProfile?.email || '',
       });
       // Clear inputs
@@ -274,7 +274,7 @@ export default function SendFilePage() {
                       <option value="">-- Choose a recipient --</option>
                       {receivers.map((r) => (
                         <option key={r.id} value={r.id}>
-                          {r.full_name || 'User'} ({r.email})
+                          {r.name || r.full_name || 'User'} ({r.email})
                         </option>
                       ))}
                     </select>
@@ -284,7 +284,7 @@ export default function SendFilePage() {
                     <div className="mt-2 p-2.5 rounded-lg bg-slate-900 border border-slate-800 text-xs flex items-center justify-between text-slate-300">
                       <div className="flex items-center space-x-2">
                         <UserCheck className="w-4 h-4 text-emerald-400" />
-                        <span className="font-medium text-white">{selectedReceiverObj.full_name || 'User'}</span>
+                        <span className="font-medium text-white">{selectedReceiverObj.name || selectedReceiverObj.full_name || 'User'}</span>
                         <span className="text-slate-400">({selectedReceiverObj.email})</span>
                       </div>
                       <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">

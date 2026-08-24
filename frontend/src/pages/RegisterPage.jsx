@@ -79,6 +79,7 @@ export default function RegisterPage() {
 
     setSubmitting(true);
     const result = await signUp(formData.email, formData.password, {
+      name: formData.fullName.trim(),
       full_name: formData.fullName.trim(),
     });
     setSubmitting(false);
