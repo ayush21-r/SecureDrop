@@ -18,23 +18,20 @@ export async function fetchReceivers(currentUserId) {
   }
 
   try {
-    let query = supabase
-      .from('profiles')
-      .select('id, name, email, updated_at')
-      .order('name', { ascending: true });
-
-    if (currentUserId) {
-      query = query.neq('id', currentUserId);
-    }
-
-    const { data, error } = await query;
+    // Call the security definer RPC function to fetch other registered receivers
+    const { data, error } = await supabase.rpc('get_receivers');
 
     if (error) {
-      console.error('Error fetching receiver profiles:', error.message);
+      console.error('Error fetching receiver profiles via RPC:', error.message);
       return { success: false, error: error.message };
     }
 
-    return { success: true, data: data || [] };
+    // Defensively filter out the current user if present
+    const receiversList = (data || []).filter(
+      (profile) => !currentUserId || profile.id !== currentUserId
+    );
+
+    return { success: true, data: receiversList };
   } catch (err) {
     console.error('Unexpected error fetching receivers:', err);
     return { success: false, error: err.message || 'Failed to load recipient list.' };
