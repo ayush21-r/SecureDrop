@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   FileText,
   Download,
@@ -26,6 +27,7 @@ import { fetchUserFiles, downloadAndDecryptFile } from '../services/fileService'
 
 export default function FilesPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState('received'); // 'received' | 'sent'
   const [searchQuery, setSearchQuery] = useState('');
@@ -175,12 +177,12 @@ export default function FilesPage() {
             <p className="text-rose-300 leading-relaxed">
               {downloadError}
               {downloadError.includes('private key could not be found') && (
-                <a
-                  href="/profile"
+                <Link
+                  to="/profile"
                   className="block mt-1.5 font-semibold text-emerald-400 hover:text-emerald-300 underline"
                 >
                   Go to Profile to restore your private key from encrypted backup &rarr;
-                </a>
+                </Link>
               )}
             </p>
           </div>
@@ -455,7 +457,7 @@ export default function FilesPage() {
                 ? () => setSearchQuery('')
                 : activeTab === 'received'
                 ? null
-                : () => (window.location.href = '/send')
+                : () => navigate('/send')
             }
           />
         )}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Send,
   Download,
@@ -27,6 +27,7 @@ import { fetchPublicKeyFromSupabase } from '../services/cryptoService';
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -325,7 +326,7 @@ export default function DashboardPage() {
                 title="No file transfers yet"
                 description="When you send or receive encrypted files, your real transfer activity will appear here."
                 actionLabel="Send Secure File"
-                onAction={() => (window.location.href = '/send')}
+                onAction={() => navigate('/send')}
               />
             )}
           </Card>

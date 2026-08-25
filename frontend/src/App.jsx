@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
@@ -13,6 +13,7 @@ import DashboardPage from './pages/DashboardPage';
 import SendFilePage from './pages/SendFilePage';
 import FilesPage from './pages/FilesPage';
 import ProfilePage from './pages/ProfilePage';
+import NotFoundPage from './pages/NotFoundPage';
 
 export default function App() {
   return (
@@ -52,6 +53,8 @@ export default function App() {
                   </ProtectedRoute>
                 }
               />
+
+              {/* Send File (supports both /send and /send-file) */}
               <Route
                 path="/send"
                 element={
@@ -60,6 +63,16 @@ export default function App() {
                   </ProtectedRoute>
                 }
               />
+              <Route
+                path="/send-file"
+                element={
+                  <ProtectedRoute>
+                    <SendFilePage />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* Files Vault (supports both /files and /my-files) */}
               <Route
                 path="/files"
                 element={
@@ -76,6 +89,8 @@ export default function App() {
                   </ProtectedRoute>
                 }
               />
+
+              {/* Profile Route */}
               <Route
                 path="/profile"
                 element={
@@ -85,8 +100,8 @@ export default function App() {
                 }
               />
 
-              {/* Catch-all route */}
-              <Route path="*" element={<Navigate to="/" replace />} />
+              {/* Catch-all 404 Route */}
+              <Route path="*" element={<NotFoundPage />} />
             </Routes>
           </main>
           <Footer />
