@@ -39,7 +39,7 @@ export default function Footer() {
         </div>
 
         <div className="mt-8 pt-6 border-t border-slate-900 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-400 gap-4">
-          <p>SecureDrop &copy; {new Date().getFullYear()} &mdash; Phase 1 Foundation.</p>
+          <p>SecureDrop &copy; {new Date().getFullYear()} &mdash; Build By Ayush Roy</p>
           <p className="font-mono text-[11px] text-slate-400">
             Engineered for AES-256 + RSA + SHA-256
           </p>
