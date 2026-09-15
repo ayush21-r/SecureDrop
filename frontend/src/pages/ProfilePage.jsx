@@ -525,25 +525,20 @@ export default function ProfilePage() {
 
             {/* Public Key Display */}
             <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-medium text-slate-300 font-sans">
-                  Registered RSA Public Key (PEM)
-                </label>
-                <span className="text-[11px] text-slate-400 font-sans">
-                  Stored in <code className="font-mono text-emerald-400">user_public_keys</code>
-                </span>
-              </div>
-              <div className="relative">
-                <pre className="p-3.5 rounded-lg bg-slate-950 border border-slate-800 text-[11px] font-mono text-slate-300 overflow-x-auto leading-relaxed max-h-44">
-                  {cryptoState.publicKeyPem || (
-                    <span className="text-slate-400 italic">Loading registered public key...</span>
-                  )}
-                </pre>
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                  <label className="block text-xs font-medium text-slate-300 font-sans">
+                    Registered RSA Public Key (PEM)
+                  </label>
+                  <span className="text-[11px] text-slate-400 font-sans">
+                    Stored in <code className="font-mono text-emerald-400">user_public_keys</code>
+                  </span>
+                </div>
                 {cryptoState.publicKeyPem && (
                   <button
                     type="button"
                     onClick={handleCopyKey}
-                    className="absolute top-2.5 right-2.5 p-1.5 rounded-md bg-slate-850 hover:bg-slate-800 text-slate-300 transition-colors border border-slate-750 flex items-center space-x-1 text-[11px]"
+                    className="shrink-0 px-2.5 py-1 rounded-md bg-slate-850 hover:bg-slate-800 text-slate-300 hover:text-white transition-colors border border-slate-750 flex items-center space-x-1.5 text-[11px] font-sans"
                     title="Copy Public Key PEM"
                   >
                     {copied ? (
@@ -553,13 +548,18 @@ export default function ProfilePage() {
                       </>
                     ) : (
                       <>
-                        <Copy className="w-3.5 h-3.5" />
+                        <Copy className="w-3.5 h-3.5 text-slate-400" />
                         <span className="font-sans">Copy</span>
                       </>
                     )}
                   </button>
                 )}
               </div>
+              <pre className="p-3.5 rounded-lg bg-slate-950 border border-slate-800 text-[11px] font-mono text-slate-300 overflow-x-auto leading-relaxed max-h-44 select-all">
+                {cryptoState.publicKeyPem || (
+                  <span className="text-slate-400 italic">Loading registered public key...</span>
+                )}
+              </pre>
             </div>
 
             {/* Self-Test Verification Section */}
