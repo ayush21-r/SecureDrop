@@ -3,7 +3,25 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
   body {
     @apply bg-slate-950 text-slate-100;
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
+  }
+}
+
+@layer utilities {
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .safe-area-bottom {
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 8px);
+  }
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
   }
 }

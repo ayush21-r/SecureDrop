@@ -13,6 +13,7 @@ import {
   X,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import InstallPWA from './InstallPWA';
 
 export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -43,13 +44,13 @@ export default function Navbar() {
     'User';
 
   return (
-    <header className="border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md sticky top-0 z-50">
+    <header className="border-b border-slate-800/80 bg-slate-950/90 backdrop-blur-md sticky top-0 z-50 safe-area-top">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         {/* Brand */}
         <Link
           to="/"
           onClick={closeMenu}
-          className="flex items-center space-x-3 group focus:outline-none"
+          className="flex items-center space-x-3 group focus:outline-none min-h-[44px]"
         >
           <div className="p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-emerald-400 group-hover:border-emerald-500/40 transition-colors">
             <Shield className="w-5 h-5" />
@@ -73,7 +74,7 @@ export default function Navbar() {
               <NavLink
                 key={item.path}
                 to={item.path}
-                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs lg:text-sm font-medium transition-colors ${
+                className={`flex items-center space-x-1.5 px-3 py-2 rounded-lg text-xs lg:text-sm font-medium transition-colors min-h-[38px] ${
                   isActive
                     ? 'bg-slate-800 text-emerald-400 border border-slate-700/80'
                     : 'text-slate-300 hover:text-white hover:bg-slate-900'
@@ -88,11 +89,13 @@ export default function Navbar() {
 
         {/* Desktop Auth Controls */}
         <div className="hidden md:flex items-center space-x-3">
+          <InstallPWA variant="button" />
+
           {user ? (
             <div className="flex items-center space-x-3">
               <Link
                 to="/profile"
-                className="flex items-center space-x-2 px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-850 border border-slate-800 transition-colors"
+                className="flex items-center space-x-2 px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-850 border border-slate-800 transition-colors min-h-[38px]"
                 title="View Profile"
               >
                 <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center text-xs font-semibold uppercase">
@@ -105,7 +108,7 @@ export default function Navbar() {
               <button
                 type="button"
                 onClick={handleLogout}
-                className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-medium text-slate-400 hover:text-rose-400 hover:bg-slate-900 rounded-lg transition-colors cursor-pointer"
+                className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-medium text-slate-400 hover:text-rose-400 hover:bg-slate-900 rounded-lg transition-colors cursor-pointer min-h-[38px]"
                 title="Log out of SecureDrop"
               >
                 <LogOut className="w-3.5 h-3.5" />
@@ -116,14 +119,14 @@ export default function Navbar() {
             <div className="flex items-center space-x-2">
               <Link
                 to="/login"
-                className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-900 rounded-lg transition-colors"
+                className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-900 rounded-lg transition-colors min-h-[38px]"
               >
                 <LogIn className="w-3.5 h-3.5 text-slate-400" />
                 <span>Login</span>
               </Link>
               <Link
                 to="/register"
-                className="flex items-center space-x-1.5 px-3.5 py-1.5 text-xs font-medium bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors shadow-sm shadow-emerald-950/40"
+                className="flex items-center space-x-1.5 px-3.5 py-1.5 text-xs font-medium bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors shadow-sm shadow-emerald-950/40 min-h-[38px]"
               >
                 <UserPlus className="w-3.5 h-3.5" />
                 <span>Register</span>
@@ -132,12 +135,13 @@ export default function Navbar() {
           )}
         </div>
 
-        {/* Mobile Menu Toggle Button */}
+        {/* Mobile Header Controls */}
         <div className="flex md:hidden items-center space-x-2">
+          <InstallPWA variant="button" />
           <button
             type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-900 focus:outline-none"
+            className="p-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-900 focus:outline-none min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer"
             aria-label="Toggle navigation menu"
           >
             {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
@@ -147,8 +151,8 @@ export default function Navbar() {
 
       {/* Mobile Drawer Menu */}
       {mobileMenuOpen && (
-        <div className="md:hidden border-b border-slate-800 bg-slate-950 px-4 pt-2 pb-6 space-y-1">
-          <div className="pb-3 mb-3 border-b border-slate-850 space-y-1">
+        <div className="md:hidden border-b border-slate-800 bg-slate-950 px-4 pt-2 pb-6 space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="pb-3 mb-2 border-b border-slate-850 space-y-1">
             {navLinks.map((item) => {
               const Icon = item.icon;
               const isActive = location.pathname === item.path;
@@ -157,7 +161,7 @@ export default function Navbar() {
                   key={item.path}
                   to={item.path}
                   onClick={closeMenu}
-                  className={`flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium ${
+                  className={`flex items-center space-x-3 px-3 py-3 rounded-lg text-sm font-medium min-h-[44px] ${
                     isActive
                       ? 'bg-slate-800 text-emerald-400 border border-slate-700'
                       : 'text-slate-300 hover:text-white hover:bg-slate-900'
@@ -170,22 +174,26 @@ export default function Navbar() {
             })}
           </div>
 
-          <div className="pt-2 flex flex-col gap-2">
+          <div className="pt-1 flex flex-col gap-2">
             {user ? (
               <div className="space-y-2">
-                <div className="px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 flex items-center space-x-3">
-                  <div className="w-7 h-7 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs font-semibold uppercase">
+                <Link
+                  to="/profile"
+                  onClick={closeMenu}
+                  className="px-3 py-2.5 rounded-lg bg-slate-900 border border-slate-800 flex items-center space-x-3 min-h-[44px]"
+                >
+                  <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs font-semibold uppercase">
                     {displayName.charAt(0)}
                   </div>
-                  <div className="truncate">
+                  <div className="truncate flex-1">
                     <div className="text-xs font-semibold text-white truncate">{displayName}</div>
                     <div className="text-[11px] text-slate-400 truncate">{user.email}</div>
                   </div>
-                </div>
+                </Link>
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="flex items-center justify-center space-x-2 w-full py-2.5 px-4 rounded-lg text-sm font-medium text-rose-400 bg-slate-900 border border-slate-800 hover:bg-rose-950/20"
+                  className="flex items-center justify-center space-x-2 w-full py-3 px-4 rounded-lg text-sm font-medium text-rose-400 bg-slate-900 border border-slate-800 hover:bg-rose-950/20 min-h-[44px] cursor-pointer"
                 >
                   <LogOut className="w-4 h-4" />
                   <span>Logout</span>
@@ -196,7 +204,7 @@ export default function Navbar() {
                 <Link
                   to="/login"
                   onClick={closeMenu}
-                  className="flex items-center justify-center space-x-2 w-full py-2.5 px-4 rounded-lg text-sm font-medium text-slate-200 bg-slate-900 border border-slate-800"
+                  className="flex items-center justify-center space-x-2 w-full py-3 px-4 rounded-lg text-sm font-medium text-slate-200 bg-slate-900 border border-slate-800 min-h-[44px]"
                 >
                   <LogIn className="w-4 h-4 text-slate-400" />
                   <span>Login</span>
@@ -204,7 +212,7 @@ export default function Navbar() {
                 <Link
                   to="/register"
                   onClick={closeMenu}
-                  className="flex items-center justify-center space-x-2 w-full py-2.5 px-4 rounded-lg text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-500"
+                  className="flex items-center justify-center space-x-2 w-full py-3 px-4 rounded-lg text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-500 min-h-[44px]"
                 >
                   <UserPlus className="w-4 h-4" />
                   <span>Register</span>
@@ -217,3 +225,4 @@ export default function Navbar() {
     </header>
   );
 }
+

@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
+import BottomNav from './components/BottomNav';
 import ProtectedRoute from './components/ProtectedRoute';
 import GuestRoute from './components/GuestRoute';
 
@@ -21,7 +22,7 @@ export default function App() {
       <AuthProvider>
         <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 selection:bg-emerald-500 selection:text-white">
           <Navbar />
-          <main className="flex-1">
+          <main className="flex-1 pb-16 md:pb-0">
             <Routes>
               {/* Public Route */}
               <Route path="/" element={<LandingPage />} />
@@ -105,8 +106,10 @@ export default function App() {
             </Routes>
           </main>
           <Footer />
+          <BottomNav />
         </div>
       </AuthProvider>
     </BrowserRouter>
   );
 }
+

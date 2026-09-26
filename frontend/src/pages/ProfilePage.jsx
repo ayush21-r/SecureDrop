@@ -217,19 +217,21 @@ export default function ProfilePage() {
     : 'Active Session';
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
       <PageHeader
         title="Account & Cryptographic Identity"
         description="Manage your persistent RSA cryptographic identity, multi-device key backup, and local vault security."
         badge={<StatusBadge status="active" label="Supabase Auth Active" />}
         action={
-          <Button variant="danger" size="sm" icon={LogOut} onClick={handleLogout}>
-            Sign Out
-          </Button>
+          <div className="flex items-center space-x-2">
+            <Button variant="danger" size="sm" icon={LogOut} onClick={handleLogout} className="min-h-[40px]">
+              Sign Out
+            </Button>
+          </div>
         }
       />
 
-      <div className="space-y-8">
+      <div className="space-y-6 sm:space-y-8">
         {/* User Identity Information */}
         <Card title="User Identity" subtitle="Account credentials authenticated by Supabase">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">

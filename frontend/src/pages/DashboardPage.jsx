@@ -21,6 +21,7 @@ import Card from '../components/Card';
 import Button from '../components/Button';
 import StatusBadge from '../components/StatusBadge';
 import EmptyState from '../components/EmptyState';
+import InstallPWA from '../components/InstallPWA';
 import { useAuth } from '../context/AuthContext';
 import { fetchUserFiles } from '../services/fileService';
 import { fetchPublicKeyFromSupabase } from '../services/cryptoService';
@@ -165,27 +166,30 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
+      {/* PWA Install Banner */}
+      <InstallPWA variant="banner" />
+
       {/* Page Header */}
       <PageHeader
         title={`Welcome back, ${displayName}`}
         description={`Logged in as ${user?.email || 'authenticated user'}. Monitor your encrypted transfers, cryptographic keys, and received files.`}
         badge={<StatusBadge status="active" label="Supabase Auth Active" />}
         action={
-          <div className="flex items-center space-x-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={loadDashboardData}
               disabled={loading}
-              className="inline-flex items-center space-x-1.5 px-3 py-2 rounded-lg bg-slate-900 hover:bg-slate-850 border border-slate-800 text-xs font-medium text-slate-300 hover:text-white transition-colors disabled:opacity-50"
+              className="inline-flex items-center space-x-1.5 px-3 py-2.5 rounded-lg bg-slate-900 hover:bg-slate-850 border border-slate-800 text-xs font-medium text-slate-300 hover:text-white transition-colors disabled:opacity-50 min-h-[44px] cursor-pointer"
               title="Refresh dashboard metrics"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline">Refresh</span>
+              <span>Refresh</span>
             </button>
 
             <Link to="/send">
-              <Button icon={PlusCircle} size="md">
+              <Button icon={PlusCircle} size="md" className="min-h-[44px]">
                 Send Secure File
               </Button>
             </Link>
@@ -195,25 +199,25 @@ export default function DashboardPage() {
 
       {/* Error Alert if dashboard load fails */}
       {error && (
-        <div className="mb-6 p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 flex items-center justify-between shadow-md">
+        <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
           <div className="flex items-center space-x-2.5">
             <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
             <span>Unable to load dashboard data: {error}</span>
           </div>
-          <Button variant="outline" size="sm" onClick={loadDashboardData}>
+          <Button variant="outline" size="sm" onClick={loadDashboardData} className="min-h-[38px] self-start sm:self-auto">
             Retry
           </Button>
         </div>
       )}
 
       {/* Metric Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {metrics.map((m, idx) => {
           const Icon = m.icon;
           return (
             <div
               key={idx}
-              className="rounded-xl border border-slate-800 bg-slate-900/60 p-5 flex flex-col justify-between shadow-sm transition-colors hover:border-slate-700/80"
+              className="rounded-xl border border-slate-800 bg-slate-900/60 p-5 flex flex-col justify-between shadow-sm transition-colors hover:border-slate-700/80 min-h-[110px]"
             >
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-slate-400">{m.title}</span>
@@ -221,7 +225,7 @@ export default function DashboardPage() {
                   <Icon className="w-4 h-4" />
                 </div>
               </div>
-              <div className="mt-4">
+              <div className="mt-3">
                 <div className="text-2xl font-bold text-white tracking-tight flex items-center space-x-2">
                   <span>{m.value}</span>
                   {loading && <Loader2 className="w-4 h-4 animate-spin text-slate-500" />}
@@ -233,8 +237,8 @@ export default function DashboardPage() {
         })}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Recent Files Table (2 Cols) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
+        {/* Recent Files Section (2 Cols) */}
         <div className="lg:col-span-2">
           <Card
             title="Recent File Transfers"
@@ -242,7 +246,7 @@ export default function DashboardPage() {
             action={
               <Link
                 to="/files"
-                className="text-xs text-emerald-400 hover:text-emerald-300 inline-flex items-center space-x-1 font-medium transition-colors"
+                className="text-xs text-emerald-400 hover:text-emerald-300 inline-flex items-center space-x-1 font-medium transition-colors min-h-[36px] py-1 px-2 rounded-md hover:bg-slate-800/40"
               >
                 <span>View All Files</span>
                 <ArrowUpRight className="w-3.5 h-3.5" />
@@ -255,71 +259,121 @@ export default function DashboardPage() {
                 <span>Loading recent file transfers...</span>
               </div>
             ) : recentTransfers.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs sm:text-sm">
-                  <thead>
-                    <tr className="text-slate-400 border-b border-slate-800">
-                      <th className="pb-3 font-medium">File Name</th>
-                      <th className="pb-3 font-medium">Size</th>
-                      <th className="pb-3 font-medium">Peer</th>
-                      <th className="pb-3 font-medium">Date</th>
-                      <th className="pb-3 font-medium text-right">Cipher</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/60">
-                    {recentTransfers.map((file) => {
-                      const isSender = file.sender_id === user?.id;
-                      const peerLabel = isSender
-                        ? `To: ${file.receiver_name || file.receiver_email || 'Recipient'}`
-                        : `From: ${file.sender_name || file.sender_email || 'Sender'}`;
+              <>
+                {/* Mobile Card List (< 640px) */}
+                <div className="block sm:hidden space-y-3">
+                  {recentTransfers.map((file) => {
+                    const isSender = file.sender_id === user?.id;
+                    const peerLabel = isSender
+                      ? `To: ${file.receiver_name || file.receiver_email || 'Recipient'}`
+                      : `From: ${file.sender_name || file.sender_email || 'Sender'}`;
 
-                      return (
-                        <tr
-                          key={file.id}
-                          className="hover:bg-slate-900/40 transition-colors"
-                        >
-                          <td className="py-3 font-mono text-slate-200">
-                            <div className="flex items-center space-x-2.5">
-                              <div className="p-1.5 rounded-lg bg-slate-800 text-emerald-400 shrink-0">
-                                <FileText className="w-3.5 h-3.5" />
+                    return (
+                      <div
+                        key={file.id}
+                        className="p-3.5 rounded-lg bg-slate-950/60 border border-slate-800/80 space-y-2"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center space-x-2.5 truncate">
+                            <div className="p-1.5 rounded-lg bg-slate-800 text-emerald-400 shrink-0">
+                              <FileText className="w-4 h-4" />
+                            </div>
+                            <span
+                              className="font-mono text-white text-xs font-medium truncate"
+                              title={file.original_filename}
+                            >
+                              {file.original_filename}
+                            </span>
+                          </div>
+                          {file.is_encrypted ? (
+                            <span className="inline-flex items-center space-x-1 text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-mono shrink-0">
+                              <Lock className="w-2.5 h-2.5" />
+                              <span>AES-256</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center text-[10px] text-slate-400 bg-slate-800 px-2 py-0.5 rounded border border-slate-700 font-mono shrink-0">
+                              Legacy
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1 border-t border-slate-900">
+                          <span className="truncate max-w-[140px] text-slate-300">{peerLabel}</span>
+                          <span className="font-mono text-slate-300">{formatFileSize(file.file_size)}</span>
+                          <span>{formatDate(file.created_at)}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Desktop/Tablet Table (>= 640px) */}
+                <div className="hidden sm:block overflow-x-auto">
+                  <table className="w-full text-left text-xs sm:text-sm">
+                    <thead>
+                      <tr className="text-slate-400 border-b border-slate-800">
+                        <th className="pb-3 font-medium">File Name</th>
+                        <th className="pb-3 font-medium">Size</th>
+                        <th className="pb-3 font-medium">Peer</th>
+                        <th className="pb-3 font-medium">Date</th>
+                        <th className="pb-3 font-medium text-right">Cipher</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60">
+                      {recentTransfers.map((file) => {
+                        const isSender = file.sender_id === user?.id;
+                        const peerLabel = isSender
+                          ? `To: ${file.receiver_name || file.receiver_email || 'Recipient'}`
+                          : `From: ${file.sender_name || file.sender_email || 'Sender'}`;
+
+                        return (
+                          <tr
+                            key={file.id}
+                            className="hover:bg-slate-900/40 transition-colors"
+                          >
+                            <td className="py-3 font-mono text-slate-200">
+                              <div className="flex items-center space-x-2.5">
+                                <div className="p-1.5 rounded-lg bg-slate-800 text-emerald-400 shrink-0">
+                                  <FileText className="w-3.5 h-3.5" />
+                                </div>
+                                <span
+                                  className="truncate max-w-[140px] sm:max-w-[200px] text-white font-medium"
+                                  title={file.original_filename}
+                                >
+                                  {file.original_filename}
+                                </span>
                               </div>
-                              <span
-                                className="truncate max-w-[140px] sm:max-w-[200px] text-white font-medium"
-                                title={file.original_filename}
-                              >
-                                {file.original_filename}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="py-3 text-slate-300 font-mono">
-                            {formatFileSize(file.file_size)}
-                          </td>
-                          <td className="py-3 text-slate-300">
-                            <div className="truncate max-w-[130px] sm:max-w-[170px]" title={peerLabel}>
-                              {peerLabel}
-                            </div>
-                          </td>
-                          <td className="py-3 text-slate-400 text-xs whitespace-nowrap">
-                            {formatDate(file.created_at)}
-                          </td>
-                          <td className="py-3 text-right">
-                            {file.is_encrypted ? (
-                              <span className="inline-flex items-center space-x-1 text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-mono">
-                                <Lock className="w-2.5 h-2.5" />
-                                <span>AES-256</span>
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center text-[10px] text-slate-400 bg-slate-800 px-2 py-0.5 rounded border border-slate-700 font-mono">
-                                Legacy
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                            </td>
+                            <td className="py-3 text-slate-300 font-mono">
+                              {formatFileSize(file.file_size)}
+                            </td>
+                            <td className="py-3 text-slate-300">
+                              <div className="truncate max-w-[130px] sm:max-w-[170px]" title={peerLabel}>
+                                {peerLabel}
+                              </div>
+                            </td>
+                            <td className="py-3 text-slate-400 text-xs whitespace-nowrap">
+                              {formatDate(file.created_at)}
+                            </td>
+                            <td className="py-3 text-right">
+                              {file.is_encrypted ? (
+                                <span className="inline-flex items-center space-x-1 text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-mono">
+                                  <Lock className="w-2.5 h-2.5" />
+                                  <span>AES-256</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center text-[10px] text-slate-400 bg-slate-800 px-2 py-0.5 rounded border border-slate-700 font-mono">
+                                  Legacy
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             ) : (
               <EmptyState
                 icon={Inbox}
@@ -375,3 +429,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+

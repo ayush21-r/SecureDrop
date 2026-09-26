@@ -132,7 +132,7 @@ export default function FilesPage() {
   });
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
       <PageHeader
         title="My Files"
         description="Access, client-side decrypt, and securely download files received from your peers."
@@ -142,7 +142,7 @@ export default function FilesPage() {
             type="button"
             onClick={loadFiles}
             disabled={loading}
-            className="inline-flex items-center space-x-1.5 px-3 py-2 rounded-lg bg-slate-900 hover:bg-slate-850 border border-slate-800 text-xs font-medium text-slate-300 hover:text-white transition-colors disabled:opacity-50"
+            className="inline-flex items-center space-x-1.5 px-3 py-2.5 rounded-lg bg-slate-900 hover:bg-slate-850 border border-slate-800 text-xs font-medium text-slate-300 hover:text-white transition-colors disabled:opacity-50 min-h-[44px] cursor-pointer"
             title="Refresh files vault"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
@@ -161,7 +161,7 @@ export default function FilesPage() {
           <button
             type="button"
             onClick={() => setDownloadSuccess(null)}
-            className="text-emerald-400 hover:text-emerald-200"
+            className="text-emerald-400 hover:text-emerald-200 p-1 cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -189,7 +189,7 @@ export default function FilesPage() {
           <button
             type="button"
             onClick={() => setDownloadError(null)}
-            className="text-rose-400 hover:text-rose-200"
+            className="text-rose-400 hover:text-rose-200 p-1 cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -198,12 +198,12 @@ export default function FilesPage() {
 
       {/* Fetch Error Banner */}
       {fetchError && (
-        <div className="mb-6 p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 flex items-center justify-between shadow-md">
+        <div className="mb-6 p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
           <div className="flex items-center space-x-2.5">
             <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
             <span>Failed to load files: {fetchError}</span>
           </div>
-          <Button variant="outline" size="sm" onClick={loadFiles}>
+          <Button variant="outline" size="sm" onClick={loadFiles} className="min-h-[38px] self-start sm:self-auto">
             Retry
           </Button>
         </div>
@@ -212,21 +212,21 @@ export default function FilesPage() {
       {/* Tabs & Search Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         {/* Tab Buttons */}
-        <div className="inline-flex p-1 rounded-lg bg-slate-900 border border-slate-800">
+        <div className="inline-flex w-full sm:w-auto p-1 rounded-lg bg-slate-900 border border-slate-800">
           <button
             type="button"
             onClick={() => {
               setActiveTab('received');
               setSearchQuery('');
             }}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+            className={`flex-1 sm:flex-initial flex items-center justify-center space-x-2 px-4 py-2.5 rounded-md text-xs font-medium transition-colors cursor-pointer min-h-[40px] ${
               activeTab === 'received'
                 ? 'bg-slate-800 text-white shadow-sm'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             <FileDown className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Received Files</span>
+            <span>Received</span>
             <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-slate-950 font-mono text-slate-300">
               {receivedFiles.length}
             </span>
@@ -238,14 +238,14 @@ export default function FilesPage() {
               setActiveTab('sent');
               setSearchQuery('');
             }}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+            className={`flex-1 sm:flex-initial flex items-center justify-center space-x-2 px-4 py-2.5 rounded-md text-xs font-medium transition-colors cursor-pointer min-h-[40px] ${
               activeTab === 'sent'
                 ? 'bg-slate-800 text-white shadow-sm'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             <Send className="w-3.5 h-3.5 text-purple-400" />
-            <span>Sent Files</span>
+            <span>Sent</span>
             <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-slate-950 font-mono text-slate-300">
               {sentFiles.length}
             </span>
@@ -267,7 +267,7 @@ export default function FilesPage() {
         </div>
       </div>
 
-      {/* Main Files Table Card */}
+      {/* Main Files Vault Card */}
       <Card>
         {loading ? (
           <div className="py-16 text-center text-xs text-slate-400 flex flex-col items-center justify-center space-y-3">
@@ -275,159 +275,257 @@ export default function FilesPage() {
             <span>Loading files from secure vault...</span>
           </div>
         ) : filteredFiles.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs sm:text-sm">
-              <thead>
-                <tr className="text-slate-400 border-b border-slate-800">
-                  <th className="pb-3 font-medium">File Name</th>
-                  <th className="pb-3 font-medium">
-                    {activeTab === 'received' ? 'Sender' : 'Recipient'}
-                  </th>
-                  <th className="pb-3 font-medium">Size</th>
-                  <th className="pb-3 font-medium">Date</th>
-                  <th className="pb-3 font-medium">Status</th>
-                  <th className="pb-3 font-medium text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60">
-                {filteredFiles.map((file) => {
-                  const isDownloading = downloadingId === file.id;
-                  const isDeleted = file.status === 'deleted';
-                  const isEncrypted = Boolean(file.is_encrypted);
+          <>
+            {/* Mobile Card List View (< 640px) */}
+            <div className="block sm:hidden space-y-4">
+              {filteredFiles.map((file) => {
+                const isDownloading = downloadingId === file.id;
+                const isDeleted = file.status === 'deleted';
+                const isEncrypted = Boolean(file.is_encrypted);
 
-                  const peerName =
-                    activeTab === 'received'
-                      ? file.sender_name || 'Registered Sender'
-                      : file.receiver_name || 'Registered Recipient';
+                const peerLabel =
+                  activeTab === 'received'
+                    ? `From: ${file.sender_name || file.sender_email || 'Registered Sender'}`
+                    : `To: ${file.receiver_name || file.receiver_email || 'Registered Recipient'}`;
 
-                  const peerEmail =
-                    activeTab === 'received'
-                      ? file.sender_email || ''
-                      : file.receiver_email || '';
+                return (
+                  <div
+                    key={file.id}
+                    className="p-4 rounded-xl bg-slate-950/70 border border-slate-800 space-y-3 shadow-sm"
+                  >
+                    {/* Header: File Name + Encryption Tag */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center space-x-2.5 truncate">
+                        <div className="p-2 rounded-lg bg-slate-800 text-emerald-400 shrink-0 border border-slate-700/60">
+                          <FileText className="w-4 h-4" />
+                        </div>
+                        <div className="truncate">
+                          <div
+                            className="font-mono text-white text-xs font-semibold truncate"
+                            title={file.original_filename}
+                          >
+                            {file.original_filename}
+                          </div>
+                          <div className="text-[11px] text-slate-400 mt-0.5 truncate">
+                            {file.content_type || 'application/octet-stream'}
+                          </div>
+                        </div>
+                      </div>
 
-                  return (
-                    <tr
-                      key={file.id}
-                      className="hover:bg-slate-900/40 transition-colors group"
+                      {isEncrypted ? (
+                        <span className="inline-flex items-center space-x-1 text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-mono shrink-0">
+                          <Lock className="w-2.5 h-2.5" />
+                          <span>AES-256</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center text-[10px] text-slate-400 bg-slate-800 px-2 py-0.5 rounded border border-slate-700 font-mono shrink-0">
+                          Legacy
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Metadata: Size, Peer, Date, Status */}
+                    <div className="grid grid-cols-2 gap-2 text-[11px] pt-2 border-t border-slate-900 text-slate-300">
+                      <div>
+                        <span className="text-slate-400">Size: </span>
+                        <span className="font-mono text-white">{formatFileSize(file.file_size)}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-slate-400">Status: </span>
+                        <span className="font-medium text-emerald-400">{file.status || 'Available'}</span>
+                      </div>
+                      <div className="truncate col-span-2 text-slate-400">
+                        {peerLabel} &bull; {formatDate(file.created_at)}
+                      </div>
+                    </div>
+
+                    {/* Action Button: Touch Friendly full-width */}
+                    <Button
+                      variant={activeTab === 'received' ? 'primary' : 'secondary'}
+                      size="md"
+                      className="w-full min-h-[44px]"
+                      icon={
+                        isDownloading
+                          ? Loader2
+                          : isEncrypted
+                          ? Unlock
+                          : Download
+                      }
+                      loading={isDownloading}
+                      disabled={isDownloading || isDeleted}
+                      onClick={() => handleDownload(file)}
                     >
-                      {/* File Name & Content Type & Encryption status */}
-                      <td className="py-4">
-                        <div className="flex items-center space-x-3">
-                          <div className="p-2.5 rounded-lg bg-slate-800 text-emerald-400 shrink-0 border border-slate-700/60">
-                            <FileText className="w-4 h-4" />
-                          </div>
-                          <div className="truncate max-w-[180px] sm:max-w-xs">
-                            <div
-                              className="font-mono font-medium text-white truncate"
-                              title={file.original_filename}
-                            >
-                              {file.original_filename}
+                      {isDownloading
+                        ? isEncrypted
+                          ? 'Decrypting File...'
+                          : 'Downloading File...'
+                        : isDeleted
+                        ? 'File Unavailable'
+                        : isEncrypted
+                        ? 'Decrypt & Download'
+                        : 'Download File'}
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Desktop / Tablet Table View (>= 640px) */}
+            <div className="hidden sm:block overflow-x-auto">
+              <table className="w-full text-left text-xs sm:text-sm">
+                <thead>
+                  <tr className="text-slate-400 border-b border-slate-800">
+                    <th className="pb-3 font-medium">File Name</th>
+                    <th className="pb-3 font-medium">
+                      {activeTab === 'received' ? 'Sender' : 'Recipient'}
+                    </th>
+                    <th className="pb-3 font-medium">Size</th>
+                    <th className="pb-3 font-medium">Date</th>
+                    <th className="pb-3 font-medium">Status</th>
+                    <th className="pb-3 font-medium text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  {filteredFiles.map((file) => {
+                    const isDownloading = downloadingId === file.id;
+                    const isDeleted = file.status === 'deleted';
+                    const isEncrypted = Boolean(file.is_encrypted);
+
+                    const peerName =
+                      activeTab === 'received'
+                        ? file.sender_name || 'Registered Sender'
+                        : file.receiver_name || 'Registered Recipient';
+
+                    const peerEmail =
+                      activeTab === 'received'
+                        ? file.sender_email || ''
+                        : file.receiver_email || '';
+
+                    return (
+                      <tr
+                        key={file.id}
+                        className="hover:bg-slate-900/40 transition-colors group"
+                      >
+                        {/* File Name & Content Type & Encryption status */}
+                        <td className="py-4">
+                          <div className="flex items-center space-x-3">
+                            <div className="p-2.5 rounded-lg bg-slate-800 text-emerald-400 shrink-0 border border-slate-700/60">
+                              <FileText className="w-4 h-4" />
                             </div>
-                            <div className="flex items-center space-x-2 text-[11px] text-slate-400 mt-0.5 truncate">
-                              <span>{file.content_type || 'application/octet-stream'}</span>
-                              {isEncrypted ? (
-                                <span className="inline-flex items-center space-x-1 text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 font-mono">
-                                  <Lock className="w-2.5 h-2.5" />
-                                  <span>AES-GCM-256</span>
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center text-[10px] text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700 font-mono">
-                                  Legacy (Unencrypted)
-                                </span>
-                              )}
+                            <div className="truncate max-w-[180px] sm:max-w-xs">
+                              <div
+                                className="font-mono font-medium text-white truncate"
+                                title={file.original_filename}
+                              >
+                                {file.original_filename}
+                              </div>
+                              <div className="flex items-center space-x-2 text-[11px] text-slate-400 mt-0.5 truncate">
+                                <span>{file.content_type || 'application/octet-stream'}</span>
+                                {isEncrypted ? (
+                                  <span className="inline-flex items-center space-x-1 text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 font-mono">
+                                    <Lock className="w-2.5 h-2.5" />
+                                    <span>AES-GCM-256</span>
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center text-[10px] text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700 font-mono">
+                                    Legacy (Unencrypted)
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </td>
+                        </td>
 
-                      {/* Peer (Sender or Receiver) */}
-                      <td className="py-4">
-                        <div className="text-slate-200 font-medium">
-                          {peerName}
-                        </div>
-                        {peerEmail && (
-                          <div className="text-[11px] text-slate-400 truncate max-w-[160px]">
-                            {peerEmail}
+                        {/* Peer (Sender or Receiver) */}
+                        <td className="py-4">
+                          <div className="text-slate-200 font-medium">
+                            {peerName}
                           </div>
-                        )}
-                      </td>
+                          {peerEmail && (
+                            <div className="text-[11px] text-slate-400 truncate max-w-[160px]">
+                              {peerEmail}
+                            </div>
+                          )}
+                        </td>
 
-                      {/* File Size */}
-                      <td className="py-4 text-slate-300 font-mono">
-                        {formatFileSize(file.file_size)}
-                      </td>
+                        {/* File Size */}
+                        <td className="py-4 text-slate-300 font-mono">
+                          {formatFileSize(file.file_size)}
+                        </td>
 
-                      {/* Date */}
-                      <td className="py-4 text-slate-400 text-xs">
-                        {formatDate(file.created_at)}
-                      </td>
+                        {/* Date */}
+                        <td className="py-4 text-slate-400 text-xs">
+                          {formatDate(file.created_at)}
+                        </td>
 
-                      {/* Status Badge */}
-                      <td className="py-4">
-                        <StatusBadge
-                          status={
-                            file.status === 'available'
-                              ? 'ready'
-                              : file.status === 'deleted'
-                              ? 'error'
-                              : 'pending'
-                          }
-                          label={
-                            file.status === 'available'
-                              ? 'Available'
-                              : file.status === 'deleted'
-                              ? 'Deleted'
-                              : file.status || 'Pending'
-                          }
-                        />
-                      </td>
+                        {/* Status Badge */}
+                        <td className="py-4">
+                          <StatusBadge
+                            status={
+                              file.status === 'available'
+                                ? 'ready'
+                                : file.status === 'deleted'
+                                ? 'error'
+                                : 'pending'
+                            }
+                            label={
+                              file.status === 'available'
+                                ? 'Available'
+                                : file.status === 'deleted'
+                                ? 'Deleted'
+                                : file.status || 'Pending'
+                            }
+                          />
+                        </td>
 
-                      {/* Action Button: Decrypt & Download or Download */}
-                      <td className="py-4 text-right">
-                        <Button
-                          variant={
-                            activeTab === 'received'
+                        {/* Action Button: Decrypt & Download or Download */}
+                        <td className="py-4 text-right">
+                          <Button
+                            variant={
+                              activeTab === 'received'
+                                ? isEncrypted
+                                  ? 'primary'
+                                  : 'primary'
+                                : 'secondary'
+                            }
+                            size="sm"
+                            icon={
+                              isDownloading
+                                ? Loader2
+                                : isEncrypted
+                                ? Unlock
+                                : Download
+                            }
+                            loading={isDownloading}
+                            disabled={isDownloading || isDeleted}
+                            onClick={() => handleDownload(file)}
+                            className="min-h-[38px]"
+                            title={
+                              isDeleted
+                                ? 'File is no longer available.'
+                                : isEncrypted
+                                ? `Decrypt and download ${file.original_filename}`
+                                : `Download ${file.original_filename}`
+                            }
+                          >
+                            {isDownloading
                               ? isEncrypted
-                                ? 'primary'
-                                : 'primary'
-                              : 'secondary'
-                          }
-                          size="sm"
-                          icon={
-                            isDownloading
-                              ? Loader2
+                                ? 'Decrypting...'
+                                : 'Downloading...'
+                              : isDeleted
+                              ? 'Unavailable'
                               : isEncrypted
-                              ? Unlock
-                              : Download
-                          }
-                          loading={isDownloading}
-                          disabled={isDownloading || isDeleted}
-                          onClick={() => handleDownload(file)}
-                          title={
-                            isDeleted
-                              ? 'File is no longer available.'
-                              : isEncrypted
-                              ? `Decrypt and download ${file.original_filename}`
-                              : `Download ${file.original_filename}`
-                          }
-                        >
-                          {isDownloading
-                            ? isEncrypted
-                              ? 'Decrypting...'
-                              : 'Downloading...'
-                            : isDeleted
-                            ? 'Unavailable'
-                            : isEncrypted
-                            ? 'Decrypt & Download'
-                            : 'Download'}
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                              ? 'Decrypt & Download'
+                              : 'Download'}
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         ) : (
           <EmptyState
             icon={activeTab === 'received' ? Inbox : Send}

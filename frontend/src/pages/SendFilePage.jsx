@@ -185,7 +185,7 @@ export default function SendFilePage() {
   const selectedReceiverObj = receivers.find((r) => r.id === selectedReceiverId);
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
       <PageHeader
         title="Send File"
         description="Select a registered recipient. Files are encrypted client-side with AES-256-GCM and session keys are encapsulated with recipient's RSA-OAEP key."
@@ -194,8 +194,8 @@ export default function SendFilePage() {
 
       {/* Success Banner */}
       {successData && (
-        <div className="mb-6 p-5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 shadow-lg">
-          <div className="flex items-start justify-between">
+        <div className="mb-6 p-4 sm:p-5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 shadow-lg">
+          <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
             <div className="flex items-start space-x-3">
               <CheckCircle2 className="w-6 h-6 text-emerald-400 shrink-0 mt-0.5" />
               <div>
@@ -209,7 +209,7 @@ export default function SendFilePage() {
                 <div className="mt-4 p-3 rounded-lg bg-slate-950/60 border border-emerald-500/20 text-xs font-mono space-y-1.5 text-slate-200">
                   <div className="flex justify-between">
                     <span className="text-slate-400">File:</span>
-                    <span className="text-white font-medium">{successData.originalFilename}</span>
+                    <span className="text-white font-medium truncate max-w-[180px] sm:max-w-none">{successData.originalFilename}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-400">Plaintext Size:</span>
@@ -217,7 +217,7 @@ export default function SendFilePage() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-400">Recipient:</span>
-                    <span className="text-emerald-400">
+                    <span className="text-emerald-400 truncate max-w-[180px] sm:max-w-none">
                       {successData.recipientName} ({successData.recipientEmail})
                     </span>
                   </div>
@@ -229,19 +229,13 @@ export default function SendFilePage() {
                     <span className="text-slate-400">Key Protection:</span>
                     <span className="text-purple-400 font-semibold">{successData.keyEncryptionAlgorithm}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Storage Path:</span>
-                    <span className="truncate max-w-[260px] text-slate-300" title={successData.fileRecord?.storage_path}>
-                      {successData.fileRecord?.storage_path}
-                    </span>
-                  </div>
                 </div>
               </div>
             </div>
             <button
               type="button"
               onClick={handleResetForm}
-              className="text-xs text-emerald-400 hover:text-emerald-300 underline font-medium cursor-pointer"
+              className="text-xs text-emerald-400 hover:text-emerald-300 underline font-medium cursor-pointer min-h-[38px] py-1 px-2"
             >
               Send Another
             </button>
